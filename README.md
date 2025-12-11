@@ -22,7 +22,7 @@ To build Victoria from source, you need to have [Go](https://golang.org/) instal
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/victoria.git
+    git clone https://github.com/theawakener0/VictoriaLang.git
     cd victoria
     ```
 
