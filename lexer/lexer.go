@@ -33,7 +33,6 @@ func (l *Lexer) NextToken() token.Token {
 	var tok token.Token
 
 	l.skipWhitespace()
-
 	switch l.ch {
 	case '=':
 		if l.peekChar() == '=' {
@@ -45,9 +44,33 @@ func (l *Lexer) NextToken() token.Token {
 			tok = newToken(token.ASSIGN, l.ch, l.line)
 		}
 	case '+':
-		tok = newToken(token.PLUS, l.ch, l.line)
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.PLUS_ASSIGN, Literal: literal, Line: l.line}
+		} else if l.peekChar() == '+' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.INC, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.PLUS, l.ch, l.line)
+		}
 	case '-':
-		tok = newToken(token.MINUS, l.ch, l.line)
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.MINUS_ASSIGN, Literal: literal, Line: l.line}
+		} else if l.peekChar() == '-' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.DEC, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.MINUS, l.ch, l.line)
+		}
 	case '!':
 		if l.peekChar() == '=' {
 			ch := l.ch
@@ -64,13 +87,52 @@ func (l *Lexer) NextToken() token.Token {
 		} else if l.peekChar() == '*' {
 			l.skipMultiLineComment()
 			return l.NextToken()
+		} else if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.SLASH_ASSIGN, Literal: literal, Line: l.line}
 		} else {
 			tok = newToken(token.SLASH, l.ch, l.line)
 		}
 	case '*':
-		tok = newToken(token.ASTERISK, l.ch, l.line)
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.ASTERISK_ASSIGN, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.ASTERISK, l.ch, l.line)
+		}
 	case '%':
-		tok = newToken(token.MODULO, l.ch, l.line)
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.MODULO_ASSIGN, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.MODULO, l.ch, l.line)
+		}
+	case '&':
+		if l.peekChar() == '&' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.AND_AND, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.ILLEGAL, l.ch, l.line)
+		}
+	case '|':
+		if l.peekChar() == '|' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.OR_OR, Literal: literal, Line: l.line}
+		} else {
+			tok = newToken(token.ILLEGAL, l.ch, l.line)
+		}
+	case '?':
+		tok = newToken(token.QUESTION, l.ch, l.line)
 	case '<':
 		if l.peekChar() == '=' {
 			ch := l.ch
@@ -96,14 +158,21 @@ func (l *Lexer) NextToken() token.Token {
 	case ',':
 		tok = newToken(token.COMMA, l.ch, l.line)
 	case '.':
-		// Check if it's a float starting with dot like .5
-		if isDigit(l.peekChar()) {
+		// Check if it's a range operator ..
+		if l.peekChar() == '.' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.RANGE, Literal: literal, Line: l.line}
+		} else if isDigit(l.peekChar()) {
+			// Check if it's a float starting with dot like .5
 			tok.Type = token.FLOAT
 			tok.Literal = l.readNumber()
 			tok.Line = l.line
 			return tok
+		} else {
+			tok = newToken(token.DOT, l.ch, l.line)
 		}
-		tok = newToken(token.DOT, l.ch, l.line)
 	case '{':
 		tok = newToken(token.LBRACE, l.ch, l.line)
 	case '}':
@@ -119,6 +188,10 @@ func (l *Lexer) NextToken() token.Token {
 	case '"':
 		tok.Type = token.STRING
 		tok.Literal = l.readString()
+		tok.Line = l.line
+	case '`':
+		tok.Type = token.STRING
+		tok.Literal = l.readMultiLineString()
 		tok.Line = l.line
 	case 0:
 		tok.Literal = ""
@@ -211,6 +284,23 @@ func (l *Lexer) readString() string {
 		l.readChar()
 		if l.ch == '"' || l.ch == 0 {
 			break
+		}
+		if l.ch == '\\' && l.peekChar() != 0 {
+			l.readChar() // skip escaped character
+		}
+	}
+	return l.input[position:l.position]
+}
+
+func (l *Lexer) readMultiLineString() string {
+	position := l.position + 1
+	for {
+		l.readChar()
+		if l.ch == '`' || l.ch == 0 {
+			break
+		}
+		if l.ch == '\n' {
+			l.line++
 		}
 	}
 	return l.input[position:l.position]

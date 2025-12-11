@@ -57,17 +57,24 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.Float{Value: node.Value}
 
 	case *ast.StringLiteral:
-		return &object.String{Value: node.Value}
+		return evalStringLiteral(node.Value, env)
 
 	case *ast.Boolean:
 		return nativeBoolToBooleanObject(node.Value)
 
 	case *ast.PrefixExpression:
+		// Handle prefix ++ and -- (they need to modify the variable)
+		if node.Operator == "++" || node.Operator == "--" {
+			return evalPrefixIncDec(node, env)
+		}
 		right := Eval(node.Right, env)
 		if isError(right) {
 			return right
 		}
 		return evalPrefixExpression(node.Operator, right)
+
+	case *ast.PostfixExpression:
+		return evalPostfixExpression(node, env)
 
 	case *ast.InfixExpression:
 		// Special handling for assignment if we treat it as infix
@@ -75,13 +82,44 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		// Wait, I said I would handle reassignment `x = 5`.
 		// In parser, I didn't implement `parseAssignmentExpression` specifically, but `parseInfixExpression` handles `=`.
 		// So `x = 5` becomes `InfixExpression(x, =, 5)`.
-		if node.Operator == "=" {
+		if node.Operator == "=" || node.Operator == "+=" || node.Operator == "-=" || node.Operator == "*=" || node.Operator == "/=" || node.Operator == "%=" {
 			return evalAssignmentExpression(node, env)
 		}
 
 		// Special handling for dot operator (field access or method call preparation)
 		if node.Operator == "." {
 			return evalDotExpression(node, env)
+		}
+
+		// Short-circuit evaluation for && and ||
+		if node.Operator == "&&" || node.Operator == "and" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if !isTruthy(left) {
+				return FALSE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
+		}
+
+		if node.Operator == "||" || node.Operator == "or" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if isTruthy(left) {
+				return TRUE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
 		}
 
 		left := Eval(node.Left, env)
@@ -170,8 +208,26 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.ForExpression:
 		return evalForExpression(node, env)
 
+	case *ast.ForInIndexExpression:
+		return evalForInIndexExpression(node, env)
+
 	case *ast.CForExpression:
 		return evalCForExpression(node, env)
+
+	case *ast.BreakStatement:
+		return &object.Break{}
+
+	case *ast.ContinueStatement:
+		return &object.Continue{}
+
+	case *ast.SwitchExpression:
+		return evalSwitchExpression(node, env)
+
+	case *ast.TernaryExpression:
+		return evalTernaryExpression(node, env)
+
+	case *ast.RangeExpression:
+		return evalRangeExpression(node, env)
 	}
 
 	return nil
@@ -205,7 +261,7 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 
 		if result != nil {
 			rt := result.Type()
-			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ {
+			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ || rt == object.BREAK_OBJ || rt == object.CONTINUE_OBJ {
 				return result
 			}
 		}
@@ -255,6 +311,97 @@ func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 		return &object.Float{Value: -value}
 	}
 	return newError("unknown operator: -%s", right.Type())
+}
+
+func evalStringLiteral(s string, env *object.Environment) object.Object {
+	// First process escape sequences
+	s = processEscapeSequences(s)
+
+	// Handle string interpolation: ${expr}
+	result := ""
+	i := 0
+	for i < len(s) {
+		if i+1 < len(s) && s[i] == '$' && s[i+1] == '{' {
+			// Find matching }
+			j := i + 2
+			depth := 1
+			for j < len(s) && depth > 0 {
+				if s[j] == '{' {
+					depth++
+				} else if s[j] == '}' {
+					depth--
+				}
+				j++
+			}
+			if depth == 0 {
+				// Extract expression
+				exprStr := s[i+2 : j-1]
+				// Parse and evaluate the expression
+				l := lexer.New(exprStr)
+				p := parser.New(l)
+				program := p.ParseProgram()
+				if len(p.Errors()) > 0 {
+					return newError("string interpolation parse error: %s", p.Errors()[0])
+				}
+				if len(program.Statements) == 0 {
+					result += ""
+				} else {
+					// Evaluate first statement/expression
+					val := Eval(program.Statements[0], env)
+					if isError(val) {
+						return val
+					}
+					if val != nil {
+						result += val.Inspect()
+					}
+				}
+				i = j
+			} else {
+				result += string(s[i])
+				i++
+			}
+		} else {
+			result += string(s[i])
+			i++
+		}
+	}
+	return &object.String{Value: result}
+}
+
+func processEscapeSequences(s string) string {
+	result := ""
+	i := 0
+	for i < len(s) {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case 'n':
+				result += "\n"
+				i += 2
+			case 't':
+				result += "\t"
+				i += 2
+			case 'r':
+				result += "\r"
+				i += 2
+			case '\\':
+				result += "\\"
+				i += 2
+			case '"':
+				result += "\""
+				i += 2
+			case '$':
+				result += "$"
+				i += 2
+			default:
+				result += string(s[i])
+				i++
+			}
+		} else {
+			result += string(s[i])
+			i++
+		}
+	}
+	return result
 }
 
 func evalInfixExpression(operator string, left, right object.Object) object.Object {
@@ -632,6 +779,68 @@ func evalDotExpression(node *ast.InfixExpression, env *object.Environment) objec
 	return newError("dot operator not supported for: %s", left.Type())
 }
 
+func evalPostfixExpression(node *ast.PostfixExpression, env *object.Environment) object.Object {
+	ident, ok := node.Left.(*ast.Identifier)
+	if !ok {
+		return newError("postfix operator on non-identifier")
+	}
+
+	currentVal, ok := env.Get(ident.Value)
+	if !ok {
+		return newError("variable not defined: %s", ident.Value)
+	}
+
+	var newVal object.Object
+	one := &object.Integer{Value: 1}
+
+	switch node.Operator {
+	case "++":
+		newVal = evalInfixExpression("+", currentVal, one)
+	case "--":
+		newVal = evalInfixExpression("-", currentVal, one)
+	default:
+		return newError("unknown operator: %s", node.Operator)
+	}
+
+	if isError(newVal) {
+		return newVal
+	}
+
+	env.Update(ident.Value, newVal)
+	return currentVal
+}
+
+func evalPrefixIncDec(node *ast.PrefixExpression, env *object.Environment) object.Object {
+	ident, ok := node.Right.(*ast.Identifier)
+	if !ok {
+		return newError("prefix %s operator on non-identifier", node.Operator)
+	}
+
+	currentVal, ok := env.Get(ident.Value)
+	if !ok {
+		return newError("variable not defined: %s", ident.Value)
+	}
+
+	var newVal object.Object
+	one := &object.Integer{Value: 1}
+
+	switch node.Operator {
+	case "++":
+		newVal = evalInfixExpression("+", currentVal, one)
+	case "--":
+		newVal = evalInfixExpression("-", currentVal, one)
+	default:
+		return newError("unknown operator: %s", node.Operator)
+	}
+
+	if isError(newVal) {
+		return newVal
+	}
+
+	env.Update(ident.Value, newVal)
+	return newVal // Prefix returns the new value
+}
+
 func evalAssignmentExpression(node *ast.InfixExpression, env *object.Environment) object.Object {
 	// left = right
 	// left must be identifier
@@ -640,17 +849,51 @@ func evalAssignmentExpression(node *ast.InfixExpression, env *object.Environment
 		return newError("assignment to non-identifier")
 	}
 
-	val := Eval(node.Right, env)
-	if isError(val) {
+	if node.Operator == "=" {
+		val := Eval(node.Right, env)
+		if isError(val) {
+			return val
+		}
+
+		_, ok = env.Update(ident.Value, val)
+		if !ok {
+			return newError("variable not defined: %s", ident.Value)
+		}
+
 		return val
 	}
 
-	_, ok = env.Update(ident.Value, val)
+	// Compound assignment: +=, -=, *=, /=
+	currentVal, ok := env.Get(ident.Value)
 	if !ok {
 		return newError("variable not defined: %s", ident.Value)
 	}
 
-	return val
+	rightVal := Eval(node.Right, env)
+	if isError(rightVal) {
+		return rightVal
+	}
+
+	var newVal object.Object
+	switch node.Operator {
+	case "+=":
+		newVal = evalInfixExpression("+", currentVal, rightVal)
+	case "-=":
+		newVal = evalInfixExpression("-", currentVal, rightVal)
+	case "*=":
+		newVal = evalInfixExpression("*", currentVal, rightVal)
+	case "/=":
+		newVal = evalInfixExpression("/", currentVal, rightVal)
+	case "%=":
+		newVal = evalInfixExpression("%", currentVal, rightVal)
+	}
+
+	if isError(newVal) {
+		return newVal
+	}
+
+	env.Update(ident.Value, newVal)
+	return newVal
 }
 
 func evalWhileExpression(node *ast.WhileExpression, env *object.Environment) object.Object {
@@ -667,8 +910,16 @@ func evalWhileExpression(node *ast.WhileExpression, env *object.Environment) obj
 		}
 
 		result = Eval(node.Body, env)
-		if result != nil && (result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ) {
-			return result
+		if result != nil {
+			if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+				return result
+			}
+			if result.Type() == object.BREAK_OBJ {
+				break
+			}
+			if result.Type() == object.CONTINUE_OBJ {
+				continue
+			}
 		}
 	}
 
@@ -682,49 +933,122 @@ func evalForExpression(node *ast.ForExpression, env *object.Environment) object.
 		return iterable
 	}
 
-	if iterable.Type() != object.ARRAY_OBJ {
+	var elements []object.Object
+
+	switch iterable := iterable.(type) {
+	case *object.Array:
+		elements = iterable.Elements
+	case *object.String:
+		for _, char := range iterable.Value {
+			elements = append(elements, &object.String{Value: string(char)})
+		}
+	case *object.Hash:
+		for _, pair := range iterable.Pairs {
+			elements = append(elements, pair.Key)
+		}
+	case *object.Range:
+		for i := iterable.Start; i < iterable.End; i++ {
+			elements = append(elements, &object.Integer{Value: i})
+		}
+	default:
 		return newError("not iterable: %s", iterable.Type())
 	}
 
-	array := iterable.(*object.Array)
 	var result object.Object = NULL
 
-	// Create a new scope for the loop variable?
-	// Usually for loops share scope or create new scope.
-	// Let's create a new scope for the loop body, but we need to set the item variable.
-	// But if we create a new scope for each iteration, it's cleaner.
-
-	for _, elem := range array.Elements {
-		// We need to set 'item' in the environment.
-		// If we use the current env, it leaks.
-		// But usually loop variables are visible or not?
-		// In Python they leak. In Go they are block scoped (sort of).
-		// Let's make them block scoped by wrapping body evaluation in a new env.
-		// But `Eval(node.Body)` creates a new scope? No, `evalBlockStatement` does NOT create a new scope in my implementation?
-		// Wait, `evalBlockStatement` iterates statements. It does NOT create a new environment.
-		// `applyFunction` creates a new environment.
-		// `evalIfExpression` does NOT create a new environment.
-		// So blocks share the environment in my implementation unless I change `evalBlockStatement`.
-		// In C, blocks create scope.
-		// Let's make `evalBlockStatement` NOT create scope, but let the caller decide?
-		// Or make `evalBlockStatement` always create scope?
-		// If `evalBlockStatement` creates scope, then `let x = 10` inside `if` is not visible outside.
-		// This is C-like.
-		// But `let` in my implementation sets in `env`.
-		// If `evalBlockStatement` uses the passed `env`, then it modifies the current env.
-		// So currently, blocks do NOT create scope.
-		// I should fix this to be C-like.
-		// But for now, let's just set the variable in the current env or a loop env.
-
-		// Let's create a loop scope.
+	for _, elem := range elements {
 		loopEnv := object.NewEnclosedEnvironment(env)
 		loopEnv.Set(node.Item.Value, elem)
 
 		result = evalBlockStatement(node.Body, loopEnv)
 
-		if result != nil && (result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ) {
-			return result
+		if result != nil {
+			if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+				return result
+			}
+			if result.Type() == object.BREAK_OBJ {
+				break
+			}
+			if result.Type() == object.CONTINUE_OBJ {
+				continue
+			}
 		}
+	}
+
+	return result
+}
+
+func evalForInIndexExpression(node *ast.ForInIndexExpression, env *object.Environment) object.Object {
+	iterable := Eval(node.Iterable, env)
+	if isError(iterable) {
+		return iterable
+	}
+
+	var result object.Object = NULL
+
+	switch iterable := iterable.(type) {
+	case *object.Array:
+		for i, elem := range iterable.Elements {
+			loopEnv := object.NewEnclosedEnvironment(env)
+			loopEnv.Set(node.Index.Value, &object.Integer{Value: int64(i)})
+			loopEnv.Set(node.Value.Value, elem)
+
+			result = evalBlockStatement(node.Body, loopEnv)
+
+			if result != nil {
+				if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+					return result
+				}
+				if result.Type() == object.BREAK_OBJ {
+					break
+				}
+				if result.Type() == object.CONTINUE_OBJ {
+					continue
+				}
+			}
+		}
+	case *object.Hash:
+		for _, pair := range iterable.Pairs {
+			loopEnv := object.NewEnclosedEnvironment(env)
+			loopEnv.Set(node.Index.Value, pair.Key)
+			loopEnv.Set(node.Value.Value, pair.Value)
+
+			result = evalBlockStatement(node.Body, loopEnv)
+
+			if result != nil {
+				if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+					return result
+				}
+				if result.Type() == object.BREAK_OBJ {
+					break
+				}
+				if result.Type() == object.CONTINUE_OBJ {
+					continue
+				}
+			}
+		}
+	case *object.String:
+		for i, char := range iterable.Value {
+			loopEnv := object.NewEnclosedEnvironment(env)
+			loopEnv.Set(node.Index.Value, &object.Integer{Value: int64(i)})
+			loopEnv.Set(node.Value.Value, &object.String{Value: string(char)})
+
+			result = evalBlockStatement(node.Body, loopEnv)
+
+			if result != nil {
+				if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+					return result
+				}
+				if result.Type() == object.BREAK_OBJ {
+					break
+				}
+				if result.Type() == object.CONTINUE_OBJ {
+					continue
+				}
+			}
+		}
+	default:
+		return newError("not iterable: %s", iterable.Type())
 	}
 
 	return result
@@ -794,8 +1118,16 @@ func evalCForExpression(node *ast.CForExpression, env *object.Environment) objec
 		bodyEnv := object.NewEnclosedEnvironment(loopEnv)
 		result = evalBlockStatement(node.Body, bodyEnv)
 
-		if result != nil && (result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ) {
-			return result
+		if result != nil {
+			if result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ {
+				return result
+			}
+			if result.Type() == object.BREAK_OBJ {
+				break
+			}
+			if result.Type() == object.CONTINUE_OBJ {
+				// fall through to update
+			}
 		}
 
 		// Update
@@ -808,6 +1140,84 @@ func evalCForExpression(node *ast.CForExpression, env *object.Environment) objec
 	}
 
 	return result
+}
+
+func evalSwitchExpression(node *ast.SwitchExpression, env *object.Environment) object.Object {
+	value := Eval(node.Value, env)
+	if isError(value) {
+		return value
+	}
+
+	for _, caseExpr := range node.Cases {
+		caseValue := Eval(caseExpr.Value, env)
+		if isError(caseValue) {
+			return caseValue
+		}
+
+		// Compare values
+		if compareObjects(value, caseValue) {
+			return Eval(caseExpr.Body, env)
+		}
+	}
+
+	if node.Default != nil {
+		return Eval(node.Default, env)
+	}
+
+	return NULL
+}
+
+func compareObjects(a, b object.Object) bool {
+	if a.Type() != b.Type() {
+		return false
+	}
+	switch a := a.(type) {
+	case *object.Integer:
+		return a.Value == b.(*object.Integer).Value
+	case *object.String:
+		return a.Value == b.(*object.String).Value
+	case *object.Boolean:
+		return a.Value == b.(*object.Boolean).Value
+	case *object.Float:
+		return a.Value == b.(*object.Float).Value
+	}
+	return a == b
+}
+
+func evalTernaryExpression(node *ast.TernaryExpression, env *object.Environment) object.Object {
+	condition := Eval(node.Condition, env)
+	if isError(condition) {
+		return condition
+	}
+
+	if isTruthy(condition) {
+		return Eval(node.Consequence, env)
+	}
+	return Eval(node.Alternative, env)
+}
+
+func evalRangeExpression(node *ast.RangeExpression, env *object.Environment) object.Object {
+	start := Eval(node.Start, env)
+	if isError(start) {
+		return start
+	}
+
+	end := Eval(node.End, env)
+	if isError(end) {
+		return end
+	}
+
+	startInt, ok := start.(*object.Integer)
+	if !ok {
+		return newError("range start must be an integer, got %s", start.Type())
+	}
+
+	endInt, ok := end.(*object.Integer)
+	if !ok {
+		return newError("range end must be an integer, got %s", end.Type())
+	}
+
+	return &object.Range{Start: startInt.Value, End: endInt.Value}
 }
 
 // unwrapObject converts a Victoria object to a Go interface{}
@@ -855,20 +1265,49 @@ var builtins = map[string]*object.Builtin{
 	},
 	"range": {
 		Fn: func(args ...object.Object) object.Object {
-			if len(args) != 2 {
-				return newError("wrong number of arguments. got=%d, want=2", len(args))
-			}
+			var start, end, step int64
 
-			start, ok1 := args[0].(*object.Integer)
-			end, ok2 := args[1].(*object.Integer)
-
-			if !ok1 || !ok2 {
-				return newError("arguments to `range` must be integers")
+			switch len(args) {
+			case 1:
+				// range(end) - from 0 to end
+				endVal, ok := args[0].(*object.Integer)
+				if !ok {
+					return newError("argument to `range` must be INTEGER, got %s", args[0].Type())
+				}
+				start, end, step = 0, endVal.Value, 1
+			case 2:
+				// range(start, end) - from start to end
+				startVal, ok1 := args[0].(*object.Integer)
+				endVal, ok2 := args[1].(*object.Integer)
+				if !ok1 || !ok2 {
+					return newError("arguments to `range` must be integers")
+				}
+				start, end, step = startVal.Value, endVal.Value, 1
+			case 3:
+				// range(start, end, step)
+				startVal, ok1 := args[0].(*object.Integer)
+				endVal, ok2 := args[1].(*object.Integer)
+				stepVal, ok3 := args[2].(*object.Integer)
+				if !ok1 || !ok2 || !ok3 {
+					return newError("arguments to `range` must be integers")
+				}
+				if stepVal.Value == 0 {
+					return newError("range step cannot be zero")
+				}
+				start, end, step = startVal.Value, endVal.Value, stepVal.Value
+			default:
+				return newError("wrong number of arguments. got=%d, want=1, 2, or 3", len(args))
 			}
 
 			elements := []object.Object{}
-			for i := start.Value; i < end.Value; i++ {
-				elements = append(elements, &object.Integer{Value: i})
+			if step > 0 {
+				for i := start; i < end; i += step {
+					elements = append(elements, &object.Integer{Value: i})
+				}
+			} else {
+				for i := start; i > end; i += step {
+					elements = append(elements, &object.Integer{Value: i})
+				}
 			}
 
 			return &object.Array{Elements: elements}
@@ -1184,6 +1623,110 @@ var builtins = map[string]*object.Builtin{
 			return &object.Array{Elements: elements}
 		},
 	},
+	"map":    nil, // initialized in init()
+	"filter": nil, // initialized in init()
+	"reduce": nil, // initialized in init()
+}
+
+func init() {
+	builtins["map"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 2 {
+				return newError("wrong number of arguments. got=%d, want=2", len(args))
+			}
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("argument 1 to `map` must be ARRAY, got %s", args[0].Type())
+			}
+			if args[1].Type() != object.FUNCTION_OBJ {
+				return newError("argument 2 to `map` must be FUNCTION, got %s", args[1].Type())
+			}
+			arr := args[0].(*object.Array)
+			fn := args[1].(*object.Function)
+			elements := make([]object.Object, len(arr.Elements))
+			for i, e := range arr.Elements {
+				fnArgs := []object.Object{e}
+				if len(fn.Parameters) > 1 {
+					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
+				}
+				result := applyFunction(fn, fnArgs)
+				if isError(result) {
+					return result
+				}
+				elements[i] = result
+			}
+			return &object.Array{Elements: elements}
+		},
+	}
+	builtins["filter"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 2 {
+				return newError("wrong number of arguments. got=%d, want=2", len(args))
+			}
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("argument 1 to `filter` must be ARRAY, got %s", args[0].Type())
+			}
+			if args[1].Type() != object.FUNCTION_OBJ {
+				return newError("argument 2 to `filter` must be FUNCTION, got %s", args[1].Type())
+			}
+			arr := args[0].(*object.Array)
+			fn := args[1].(*object.Function)
+			elements := []object.Object{}
+			for i, e := range arr.Elements {
+				fnArgs := []object.Object{e}
+				if len(fn.Parameters) > 1 {
+					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
+				}
+				result := applyFunction(fn, fnArgs)
+				if isError(result) {
+					return result
+				}
+				if isTruthy(result) {
+					elements = append(elements, e)
+				}
+			}
+			return &object.Array{Elements: elements}
+		},
+	}
+	builtins["reduce"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) < 2 || len(args) > 3 {
+				return newError("wrong number of arguments. got=%d, want=2 or 3", len(args))
+			}
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("argument 1 to `reduce` must be ARRAY, got %s", args[0].Type())
+			}
+			if args[1].Type() != object.FUNCTION_OBJ {
+				return newError("argument 2 to `reduce` must be FUNCTION, got %s", args[1].Type())
+			}
+			arr := args[0].(*object.Array)
+			fn := args[1].(*object.Function)
+
+			var accumulator object.Object
+			startIdx := 0
+
+			if len(args) == 3 {
+				accumulator = args[2]
+			} else if len(arr.Elements) > 0 {
+				accumulator = arr.Elements[0]
+				startIdx = 1
+			} else {
+				return newError("reduce of empty array with no initial value")
+			}
+
+			for i := startIdx; i < len(arr.Elements); i++ {
+				fnArgs := []object.Object{accumulator, arr.Elements[i]}
+				if len(fn.Parameters) > 2 {
+					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
+				}
+				result := applyFunction(fn, fnArgs)
+				if isError(result) {
+					return result
+				}
+				accumulator = result
+			}
+			return accumulator
+		},
+	}
 }
 
 func createModule(props map[string]object.Object) *object.Hash {

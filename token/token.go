@@ -27,6 +27,15 @@ const (
 	SLASH    = "/"
 	MODULO   = "%"
 
+	PLUS_ASSIGN     = "+="
+	MINUS_ASSIGN    = "-="
+	ASTERISK_ASSIGN = "*="
+	SLASH_ASSIGN    = "/="
+	MODULO_ASSIGN   = "%="
+
+	INC = "++"
+	DEC = "--"
+
 	LT     = "<"
 	GT     = ">"
 	EQ     = "=="
@@ -34,9 +43,14 @@ const (
 	LTE    = "<="
 	GTE    = ">="
 
-	AND = "and"
-	OR  = "or"
-	NOT = "not"
+	AND     = "and"
+	OR      = "or"
+	NOT     = "not"
+	AND_AND = "&&"
+	OR_OR   = "||"
+
+	QUESTION = "?"
+	RANGE    = ".."
 
 	// Delimiters
 	COMMA     = ","
@@ -66,26 +80,36 @@ const (
 	INCLUDE  = "INCLUDE"
 	TRY      = "TRY"
 	CATCH    = "CATCH"
+	BREAK    = "BREAK"
+	CONTINUE = "CONTINUE"
+	SWITCH   = "SWITCH"
+	CASE     = "CASE"
+	DEFAULT  = "DEFAULT"
 )
 
 var keywords = map[string]TokenType{
-	"define":  FUNCTION,
-	"let":     LET,
-	"true":    TRUE,
-	"false":   FALSE,
-	"if":      IF,
-	"else":    ELSE,
-	"return":  RETURN,
-	"struct":  STRUCT,
-	"while":   WHILE,
-	"for":     FOR,
-	"in":      IN,
-	"and":     AND,
-	"or":      OR,
-	"not":     NOT,
-	"include": INCLUDE,
-	"try":     TRY,
-	"catch":   CATCH,
+	"define":   FUNCTION,
+	"let":      LET,
+	"true":     TRUE,
+	"false":    FALSE,
+	"if":       IF,
+	"else":     ELSE,
+	"return":   RETURN,
+	"struct":   STRUCT,
+	"while":    WHILE,
+	"for":      FOR,
+	"in":       IN,
+	"and":      AND,
+	"or":       OR,
+	"not":      NOT,
+	"include":  INCLUDE,
+	"try":      TRY,
+	"catch":    CATCH,
+	"break":    BREAK,
+	"continue": CONTINUE,
+	"switch":   SWITCH,
+	"case":     CASE,
+	"default":  DEFAULT,
 }
 
 func LookupIdent(ident string) TokenType {

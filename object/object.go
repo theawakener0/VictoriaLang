@@ -24,6 +24,9 @@ const (
 	HASH_OBJ         = "HASH"
 	STRUCT_OBJ       = "STRUCT"          // The struct definition
 	INSTANCE_OBJ     = "STRUCT_INSTANCE" // The instance
+	BREAK_OBJ        = "BREAK"
+	CONTINUE_OBJ     = "CONTINUE"
+	RANGE_OBJ        = "RANGE"
 )
 
 type Object interface {
@@ -244,3 +247,24 @@ func (e *Environment) Update(name string, val Object) (Object, bool) {
 	}
 	return nil, false
 }
+
+// Break represents a break statement
+type Break struct{}
+
+func (b *Break) Type() ObjectType { return BREAK_OBJ }
+func (b *Break) Inspect() string  { return "break" }
+
+// Continue represents a continue statement
+type Continue struct{}
+
+func (c *Continue) Type() ObjectType { return CONTINUE_OBJ }
+func (c *Continue) Inspect() string  { return "continue" }
+
+// Range represents a range like 0..10
+type Range struct {
+	Start int64
+	End   int64
+}
+
+func (r *Range) Type() ObjectType { return RANGE_OBJ }
+func (r *Range) Inspect() string  { return fmt.Sprintf("%d..%d", r.Start, r.End) }

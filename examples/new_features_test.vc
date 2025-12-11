@@ -1,0 +1,128 @@
+// Test file for all new features
+
+print("=== Testing Pre-increment/decrement ===")
+let x = 5
+print("x = " + string(x))
+print("++x = " + string(++x))  // Should be 6
+print("x after ++x = " + string(x))  // Should be 6
+print("--x = " + string(--x))  // Should be 5
+print("x after --x = " + string(x))  // Should be 5
+
+print("\n=== Testing Modulo Assignment ===")
+let y = 10
+y %= 3
+print("10 %= 3 = " + string(y))  // Should be 1
+
+print("\n=== Testing For Loop with Index ===")
+let arr = [10, 20, 30, 40]
+for i, v in arr {
+    print("Index: " + string(i) + ", Value: " + string(v))
+}
+
+print("\n=== Testing Range-based For Loop ===")
+print("for i in 0..5:")
+for i in 0..5 {
+    print("  i = " + string(i))
+}
+
+print("\n=== Testing range() Function ===")
+print("range(5): " + string(range(5)))
+print("range(2, 7): " + string(range(2, 7)))
+print("range(0, 10, 2): " + string(range(0, 10, 2)))
+print("range(10, 0, -2): " + string(range(10, 0, -2)))
+
+print("for i in range(3):")
+for i in range(3) {
+    print("  i = " + string(i))
+}
+
+print("\n=== Testing Break/Continue ===")
+print("Break test (should print 0, 1, 2):")
+for i in 0..10 {
+    if (i == 3) {
+        break
+    }
+    print("  " + string(i))
+}
+
+print("Continue test (should skip 2):")
+for i in 0..5 {
+    if (i == 2) {
+        continue
+    }
+    print("  " + string(i))
+}
+
+print("\n=== Testing Logical Operators ===")
+print("true && true = " + string(true && true))    // true
+print("true && false = " + string(true && false))  // false
+print("false || true = " + string(false || true))  // true
+print("false || false = " + string(false || false)) // false
+
+print("\n=== Testing Ternary Operator ===")
+let a = 10
+let result = a > 5 ? "greater" : "less"
+print("10 > 5 ? 'greater' : 'less' = " + result)
+
+let b = 3
+let result2 = b > 5 ? "greater" : "less"
+print("3 > 5 ? 'greater' : 'less' = " + result2)
+
+print("\n=== Testing String Interpolation ===")
+let name = "Victoria"
+let version = 1
+print("Hello from ${name} version ${version}!")
+print("2 + 2 = ${2 + 2}")
+
+print("\n=== Testing Multi-line Strings ===")
+let multiline = `This is a
+multi-line
+string`
+print(multiline)
+
+print("\n=== Testing Array Methods ===")
+let numbers = [1, 2, 3, 4, 5]
+
+// map
+let doubled = map(numbers, define(x) { x * 2 })
+print("map([1,2,3,4,5], define(x) { x * 2 }) = " + string(doubled))
+
+// filter
+let evens = filter(numbers, define(x) { x % 2 == 0 })
+print("filter([1,2,3,4,5], define(x) { x % 2 == 0 }) = " + string(evens))
+
+// reduce
+let sum = reduce(numbers, define(acc, x) { acc + x }, 0)
+print("reduce([1,2,3,4,5], define(acc, x) { acc + x }, 0) = " + string(sum))
+
+print("\n=== Testing Switch Statement ===")
+let day = 3
+switch (day) {
+    case 1: {
+        print("Monday")
+    }
+    case 2: {
+        print("Tuesday")
+    }
+    case 3: {
+        print("Wednesday")
+    }
+    default: {
+        print("Other day")
+    }
+}
+
+let fruit = "apple"
+switch (fruit) {
+    case "banana": {
+        print("It's a banana")
+    }
+    case "apple": {
+        print("It's an apple")
+    }
+    default: {
+        print("Unknown fruit")
+    }
+}
+
+print("\n=== All tests complete! ===")

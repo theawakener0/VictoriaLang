@@ -399,6 +399,24 @@ func (sl *StructLiteral) String() string {
 	return out.String()
 }
 
+// PostfixExpression
+type PostfixExpression struct {
+	Token    token.Token // The operator token, e.g. ++
+	Operator string
+	Left     Expression
+}
+
+func (pe *PostfixExpression) expressionNode()      {}
+func (pe *PostfixExpression) TokenLiteral() string { return pe.Token.Literal }
+func (pe *PostfixExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(")
+	out.WriteString(pe.Left.String())
+	out.WriteString(pe.Operator)
+	out.WriteString(")")
+	return out.String()
+}
+
 // StructInstantiation
 type StructInstantiation struct {
 	Token  token.Token // The struct name identifier
@@ -505,5 +523,130 @@ func (md *MethodDefinition) String() string {
 	// params
 	out.WriteString(") ")
 	out.WriteString(md.Body.String())
+	return out.String()
+}
+
+// BreakStatement
+type BreakStatement struct {
+	Token token.Token
+}
+
+func (bs *BreakStatement) statementNode()       {}
+func (bs *BreakStatement) TokenLiteral() string { return bs.Token.Literal }
+func (bs *BreakStatement) String() string       { return "break" }
+
+// ContinueStatement
+type ContinueStatement struct {
+	Token token.Token
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ContinueStatement) String() string       { return "continue" }
+
+// SwitchExpression
+type SwitchExpression struct {
+	Token   token.Token
+	Value   Expression
+	Cases   []*CaseExpression
+	Default *BlockStatement
+}
+
+func (se *SwitchExpression) expressionNode()      {}
+func (se *SwitchExpression) TokenLiteral() string { return se.Token.Literal }
+func (se *SwitchExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("switch ")
+	out.WriteString(se.Value.String())
+	out.WriteString(" { ")
+	for _, c := range se.Cases {
+		out.WriteString(c.String())
+	}
+	if se.Default != nil {
+		out.WriteString("default ")
+		out.WriteString(se.Default.String())
+	}
+	out.WriteString("}")
+	return out.String()
+}
+
+// CaseExpression
+type CaseExpression struct {
+	Token token.Token
+	Value Expression
+	Body  *BlockStatement
+}
+
+func (ce *CaseExpression) expressionNode()      {}
+func (ce *CaseExpression) TokenLiteral() string { return ce.Token.Literal }
+func (ce *CaseExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("case ")
+	out.WriteString(ce.Value.String())
+	out.WriteString(" ")
+	out.WriteString(ce.Body.String())
+	return out.String()
+}
+
+// TernaryExpression
+type TernaryExpression struct {
+	Token       token.Token // The ? token
+	Condition   Expression
+	Consequence Expression
+	Alternative Expression
+}
+
+func (te *TernaryExpression) expressionNode()      {}
+func (te *TernaryExpression) TokenLiteral() string { return te.Token.Literal }
+func (te *TernaryExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(")
+	out.WriteString(te.Condition.String())
+	out.WriteString(" ? ")
+	out.WriteString(te.Consequence.String())
+	out.WriteString(" : ")
+	out.WriteString(te.Alternative.String())
+	out.WriteString(")")
+	return out.String()
+}
+
+// RangeExpression
+type RangeExpression struct {
+	Token token.Token // The .. token
+	Start Expression
+	End   Expression
+}
+
+func (re *RangeExpression) expressionNode()      {}
+func (re *RangeExpression) TokenLiteral() string { return re.Token.Literal }
+func (re *RangeExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString(re.Start.String())
+	out.WriteString("..")
+	out.WriteString(re.End.String())
+	return out.String()
+}
+
+// ForInIndexExpression - for i, v in arr { }
+type ForInIndexExpression struct {
+	Token    token.Token
+	Index    *Identifier
+	Value    *Identifier
+	Iterable Expression
+	Body     *BlockStatement
+}
+
+func (fe *ForInIndexExpression) expressionNode()      {}
+func (fe *ForInIndexExpression) TokenLiteral() string { return fe.Token.Literal }
+func (fe *ForInIndexExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("for ")
+	out.WriteString(fe.Index.String())
+	out.WriteString(", ")
+	out.WriteString(fe.Value.String())
+	out.WriteString(" in ")
+	out.WriteString(fe.Iterable.String())
+	out.WriteString(" ")
+	out.WriteString(fe.Body.String())
 	return out.String()
 }

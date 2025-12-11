@@ -1,5 +1,7 @@
 # Victoria Programming Language
 
+![Queen Victoria](media/QueenVictoria.jpg)
+
 ![Victoria Language](https://img.shields.io/badge/Victoria-Language-blueviolet?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)
@@ -14,7 +16,11 @@
 - **Object-Oriented**: Support for `structs` and methods to organize your code.
 - **Dynamic Typing**: No need to declare types explicitly.
 - **Rich Standard Library**: Built-in support for strings, arrays, hashes, and networking.
-- **Versatile Loops**: Supports `for`, `for-in`, and `while` loops.
+- **Versatile Loops**: Supports `for`, `for-in`, `while` loops with `break`/`continue`.
+- **Modern Operators**: Ternary operator, compound assignments (`+=`, `-=`, `++`, `--`).
+- **String Interpolation**: Embed expressions in strings with `${expr}`.
+- **Functional Programming**: `map`, `filter`, `reduce` for array processing.
+- **Switch Statements**: Clean pattern matching with `switch`/`case`/`default`.
 
 ## 🚀 Installation
 
@@ -23,7 +29,7 @@ To build Victoria from source, you need to have [Go](https://golang.org/) instal
 1.  Clone the repository:
     ```bash
     git clone https://github.com/theawakener0/VictoriaLang.git
-    cd victoria
+    cd VictoriaLang 
     ```
 
 2.  Build the interpreter:
@@ -45,7 +51,7 @@ Start the Read-Eval-Print Loop (REPL) by running the executable without argument
 
 ```victoria
 >> let name = "World"
->> print("Hello, " + name + "!")
+>> print("Hello, ${name}!")
 Hello, World!
 ```
 
@@ -55,6 +61,34 @@ Execute a Victoria script (`.vc` file) by passing the filename:
 
 ```bash
 ./victoria examples/hello.vc
+```
+
+## 🎯 Quick Examples
+
+```victoria
+// String interpolation
+let name = "Victoria"
+print("Hello, ${name}!")
+
+// Range-based loops
+for i in 0..5 {
+    print(i)  // 0, 1, 2, 3, 4
+}
+
+// Functional programming
+let nums = [1, 2, 3, 4, 5]
+let doubled = map(nums, define(x) { x * 2 })
+let evens = filter(nums, define(x) { x % 2 == 0 })
+
+// Ternary operator
+let status = age >= 18 ? "adult" : "minor"
+
+// Switch statements
+switch (day) {
+    case 1: { print("Monday") }
+    case 2: { print("Tuesday") }
+    default: { print("Other day") }
+}
 ```
 
 ## 📚 Documentation
@@ -76,6 +110,7 @@ We have a collection of examples in the `examples/` directory to help you get st
 - **[fib.vc](examples/fib.vc)**: Fibonacci sequence using recursion.
 - **[server.vc](examples/server.vc)**: A simple HTTP server.
 - **[structs.vc](examples/structs.vc)**: Working with structs and methods.
+- **[new_features_test.vc](examples/new_features_test.vc)**: Demonstrates all modern features.
 
 See the [Examples README](examples/README.md) for a full list.
 

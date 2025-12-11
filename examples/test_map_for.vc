@@ -1,0 +1,11 @@
+let m = {"a": 1, "b": 2};
+print("map created");
+let keys = "";
+print("keys initialized");
+for k in m {
+    print("in loop, k = " + k);
+    keys += k;
+}
+print("after loop, keys = " + keys);
+print("len(keys) = ");
+print(len(keys));

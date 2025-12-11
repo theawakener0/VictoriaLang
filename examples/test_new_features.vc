@@ -1,0 +1,64 @@
+
+let x = 1;
+x += 2;
+if (x != 3) {
+    print("x += 2 failed, got " + x);
+} else {
+    print("x += 2 passed");
+}
+
+x++;
+if (x != 4) {
+    print("x++ failed, got " + x);
+} else {
+    print("x++ passed");
+}
+
+x--;
+if (x != 3) {
+    print("x-- failed, got " + x);
+} else {
+    print("x-- passed");
+}
+
+let s = "hello";
+s += " world";
+if (s != "hello world") {
+    print("s += failed, got " + s);
+} else {
+    print("s += passed");
+}
+
+let arr = [1, 2, 3];
+let sum = 0;
+for i in arr {
+    sum += i
+}
+if (sum != 6) {
+    print("for in array failed, got " + sum);
+} else {
+    print("for in array passed");
+}
+
+let str = "abc";
+let res = "";
+for c in str {
+    res += c + "-"
+}
+if (res != "a-b-c-") {
+    print("for in string failed, got " + res);
+} else {
+    print("for in string passed");
+}
+
+let m = {"a": 1, "b": 2};
+let keys = "";
+for k in m {
+    keys += k
+}
+// keys order is not guaranteed, but should contain a and b
+if (len(keys) != 2) {
+    print("for in map failed, got " + keys);
+} else {
+    print("for in map passed");
+}
