@@ -1,0 +1,4 @@
+let myLibVar = "Hello from myLib"
+let myLibFunc = define() {
+    return "myLibFunc called"
+}

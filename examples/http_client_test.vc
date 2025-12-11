@@ -1,0 +1,6 @@
+include "net"
+
+print("Fetching http://localhost:8080/ ...")
+let content = net.get("http://localhost:8080/")
+print("Received content:")
+print(content)

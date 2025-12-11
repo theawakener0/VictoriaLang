@@ -1,0 +1,10 @@
+// Hello World
+print("Hello, Victoria!")
+
+// Variables
+let name = "Victoria"
+print("Welcome to " + name)
+
+// List
+let numbers = [1, 2, 3, 4, 5]
+print(numbers)

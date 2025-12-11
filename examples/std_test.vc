@@ -1,0 +1,18 @@
+include "std"
+
+let arr = [1, 2, 3]
+print("Original: " + string(arr))
+print("First: " + string(std.first(arr)))
+print("Last: " + string(std.last(arr)))
+print("Rest: " + string(std.rest(arr)))
+print("Push 4: " + string(std.push(arr, 4)))
+print("Pop: " + string(std.pop(arr)))
+
+let str = "hello world"
+print("Upper: " + std.upper(str))
+print("Split: " + string(std.split(str, " ")))
+print("Contains 'world': " + string(std.contains(str, "world")))
+
+let h = {"a": 1, "b": 2}
+print("Keys: " + string(std.keys(h)))
+print("Values: " + string(std.values(h)))

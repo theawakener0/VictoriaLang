@@ -1,0 +1,23 @@
+include "net"
+include "os"
+
+let port = ":9000"
+
+print("Connecting to " + port + "...")
+let conn = net.dial("tcp", port)
+
+print("Reading welcome message...")
+let welcome = conn.read(1024)
+print(welcome)
+
+print("Sending 'Hello'...")
+conn.write("Hello")
+let response = conn.read(1024)
+print(response)
+
+print("Sending 'Bye'...")
+conn.write("Bye")
+let response2 = conn.read(1024)
+print(response2)
+
+conn.close()

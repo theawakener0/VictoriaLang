@@ -1,0 +1,19 @@
+include "net"
+
+print("Connecting to google.com:80...")
+let conn = net.dial("tcp", "google.com:80")
+
+print("Sending GET request...")
+conn.write("GET / HTTP/1.0\r\nHost: google.com\r\n\r\n")
+
+print("Reading response...")
+let response = conn.read(4096)
+print("Response received (first 100 chars):")
+// We don't have substring yet, so just print it all or rely on terminal truncation
+// Or use std.split to get first line
+include "std"
+let lines = std.split(response, "\r\n")
+print(std.first(lines))
+
+conn.close()
+print("Connection closed.")

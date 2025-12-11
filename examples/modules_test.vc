@@ -1,0 +1,25 @@
+// Modules Test
+
+// OS Module
+print(format("Args: %s", string(os.args)))
+
+let filename = "test_file.txt"
+let content = "Hello from Victoria OS Module!"
+
+print(format("Writing to %s...", filename))
+os.writeFile(filename, content)
+
+print(format("Reading from %s...", filename))
+let readContent = os.readFile(filename)
+print(format("Content: %s", readContent))
+
+if (readContent == content) {
+    print("File I/O Test Passed!")
+} else {
+    print("File I/O Test Failed!")
+}
+
+// Net Module
+print("Fetching example.com...")
+let html = net.get("http://example.com")
+print(format("Response length: %d", len(html)))

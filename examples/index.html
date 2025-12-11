@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Victoria Web Server</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #4CAF50; }
+        p { font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <h1>Hello from Victoria!</h1>
+    <p>This HTML page is served by the Victoria Programming Language HTTP Server.</p>
+    <p>Current Time: <span id="time"></span></p>
+    <script>
+        document.getElementById("time").innerText = new Date().toLocaleTimeString();
+    </script>
+</body>
+</html>

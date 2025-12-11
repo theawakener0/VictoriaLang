@@ -1,0 +1,31 @@
+include "net"
+include "os"
+
+let port = ":8080"
+
+// Read the HTML file content
+print("Reading index.html...")
+let htmlContent = os.readFile("examples/index.html")
+
+let handler = define(req) {
+    print("Received request: " + req["method"] + " " + req["path"])
+    
+    // Serve the HTML file for the root path
+    if (req["path"] == "/") {
+        return {
+            "status": 200,
+            "content_type": "text/html",
+            "body": htmlContent
+        }
+    }
+    
+    // 404 for other paths
+    return {
+        "status": 404,
+        "content_type": "text/plain",
+        "body": "404 Not Found"
+    }
+}
+
+print("Starting HTTP server on http://localhost" + port)
+net.listen(port, handler)

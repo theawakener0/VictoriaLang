@@ -1,0 +1,19 @@
+// Structs
+struct Student {
+    name
+    age
+}
+
+define Student.greet() {
+    print("Hello, my name is " + self.name)
+}
+
+let s = Student {
+    name: "Ahmed",
+    age: 15
+}
+
+print(s)
+s.greet()
+print("Age is:")
+print(s.age)

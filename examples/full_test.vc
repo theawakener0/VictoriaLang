@@ -1,0 +1,52 @@
+include "os"
+include "std"
+include "net"
+
+print("--- OS Module Tests ---")
+
+let testDir = "test_dir"
+print("Creating directory: " + testDir)
+os.mkdir(testDir)
+
+print("Writing file in directory...")
+let testFile = testDir + "/test.txt"
+os.writeFile(testFile, "hello world")
+
+print("Reading directory...")
+let files = os.readDir(testDir)
+print("Files in " + testDir + ": " + string(files))
+
+print("Stat file...")
+let info = os.stat(testFile)
+print("File info: " + string(info))
+
+print("Renaming file...")
+let newFile = testDir + "/renamed.txt"
+os.rename(testFile, newFile)
+print("New file exists: " + string(os.exists(newFile)))
+print("Old file exists: " + string(os.exists(testFile)))
+
+print("Current directory: " + os.getwd())
+
+print("Cleaning up...")
+os.remove(newFile)
+os.remove(testDir)
+print("Cleanup done.")
+
+
+print("\n--- Net Module Tests ---")
+// We can't easily test PUT/DELETE without a server that accepts them.
+// But we can try HEAD on google.com
+print("HEAD google.com...")
+let status = net.head("https://www.google.com")
+print("Status: " + string(status))
+
+// We can try to PUT to a non-existent endpoint and expect error or 404
+// print("PUT test...")
+// let putResp = net.put("https://httpbin.org/put", "application/json", "{\"test\":1}")
+// print("PUT response: " + putResp)
+
+print("\n--- Include Test ---")
+include "examples/mylib"
+print(myLibVar)
+print(myLibFunc())

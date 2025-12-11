@@ -1,0 +1,21 @@
+include "os"
+include "std"
+include "examples/mylib"
+
+print("Checking os.exists...")
+if (os.exists("examples/mylib.vc")) {
+    print("mylib.vc exists")
+} else {
+    print("mylib.vc does not exist")
+}
+
+print("Checking included variable...")
+print(myLibVar)
+
+print("Checking included function...")
+print(myLibFunc())
+
+print("Checking os.env...")
+// Just check if we can access keys, don't print the whole thing as it might be huge
+let keys = std.keys(os.env)
+print("Number of env vars: " + string(len(keys)))

@@ -1,0 +1,34 @@
+print("Test 1: Catching error")
+try {
+    let x = 5 + true; // Type mismatch error
+} catch (e) {
+    print("Caught error: " + e);
+}
+
+print("Test 2: No error")
+let result = try {
+    10 + 20;
+};
+print("Result: ");
+print(result);
+
+print("Test 3: Catch block return")
+let caught = try {
+    let y = 10;
+    y + true;
+} catch (err) {
+    "Recovered from " + err;
+};
+print(caught);
+
+print("Test 4: Nested try")
+try {
+    try {
+        let z = 5 + true;
+    } catch (e) {
+        print("Inner caught: " + e);
+        let a = 5 + true; // Error in catch block
+    }
+} catch (e) {
+    print("Outer caught: " + e);
+}

@@ -1,0 +1,36 @@
+include "net"
+include "os"
+
+let port = ":8080"
+
+let handler = define(req) {
+    print("Received request: " + req["method"] + " " + req["path"])
+    
+    if (req["path"] == "/") {
+        return "<h1>Welcome to Victoria Web Server!</h1><p><a href='/about'>About</a></p>"
+    }
+    
+    if (req["path"] == "/about") {
+        return {
+            "status": 200,
+            "content_type": "text/html",
+            "body": "<html><body><h1>About Us</h1><p>Powered by Victoria Language.</p></body></html>"
+        }
+    }
+    
+    if (req["path"] == "/api/data") {
+        return {
+            "status": 200,
+            "content_type": "application/json",
+            "body": "{\"message\": \"Hello JSON\", \"value\": 123}"
+        }
+    }
+
+    return {
+        "status": 404,
+        "body": "<h1>404 Not Found</h1>"
+    }
+}
+
+print("Starting server on " + port)
+net.listen(port, handler)
