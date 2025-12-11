@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"victoria/ast"
+	"victoria/errors"
 	"victoria/lexer"
 	"victoria/object"
 	"victoria/parser"
@@ -21,6 +22,28 @@ var (
 	TRUE  = &object.Boolean{Value: true}
 	FALSE = &object.Boolean{Value: false}
 )
+
+// EvalContext holds context for evaluation including source code for error messages
+type EvalContext struct {
+	SourceCode string
+	Filename   string
+}
+
+// Global context for error reporting - set by the runner
+var currentContext *EvalContext
+
+// SetEvalContext sets the global evaluation context for error reporting
+func SetEvalContext(source string, filename string) {
+	currentContext = &EvalContext{
+		SourceCode: source,
+		Filename:   filename,
+	}
+}
+
+// ClearEvalContext clears the evaluation context
+func ClearEvalContext() {
+	currentContext = nil
+}
 
 func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
@@ -71,7 +94,14 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		if isError(right) {
 			return right
 		}
-		return evalPrefixExpression(node.Operator, right)
+		result := evalPrefixExpression(node.Operator, right)
+		// Add location info to errors
+		if errObj, ok := result.(*object.Error); ok && errObj.Line == 0 {
+			errObj.Line = node.Token.Line
+			errObj.Column = node.Token.Column
+			errObj.EndColumn = node.Token.EndColumn
+		}
+		return result
 
 	case *ast.PostfixExpression:
 		return evalPostfixExpression(node, env)
@@ -132,7 +162,14 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return right
 		}
 
-		return evalInfixExpression(node.Operator, left, right)
+		result := evalInfixExpression(node.Operator, left, right)
+		// Add location info to errors
+		if errObj, ok := result.(*object.Error); ok && errObj.Line == 0 {
+			errObj.Line = node.Token.Line
+			errObj.Column = node.Token.Column
+			errObj.EndColumn = node.Token.EndColumn
+		}
+		return result
 
 	case *ast.IfExpression:
 		return evalIfExpression(node, env)
@@ -159,7 +196,14 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return args[0]
 		}
 
-		return applyFunction(function, args)
+		result := applyFunction(function, args)
+		// Add location info to errors
+		if errObj, ok := result.(*object.Error); ok && errObj.Line == 0 {
+			errObj.Line = node.Token.Line
+			errObj.Column = node.Token.Column
+			errObj.EndColumn = node.Token.EndColumn
+		}
+		return result
 
 	case *ast.ArrayLiteral:
 		elements := evalExpressions(node.Elements, env)
@@ -177,7 +221,14 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		if isError(index) {
 			return index
 		}
-		return evalIndexExpression(left, index)
+		result := evalIndexExpression(left, index)
+		// Add location info to errors
+		if errObj, ok := result.(*object.Error); ok && errObj.Line == 0 {
+			errObj.Line = node.Token.Line
+			errObj.Column = node.Token.Column
+			errObj.EndColumn = node.Token.EndColumn
+		}
+		return result
 
 	case *ast.HashLiteral:
 		return evalHashLiteral(node, env)
@@ -547,7 +598,7 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 		return builtin
 	}
 
-	return newError("identifier not found: " + node.Value)
+	return newErrorWithLocation("identifier not found: "+node.Value, node.Token.Line, node.Token.Column, node.Token.EndColumn)
 }
 
 func isTruthy(obj object.Object) bool {
@@ -565,6 +616,69 @@ func isTruthy(obj object.Object) bool {
 
 func newError(format string, a ...interface{}) *object.Error {
 	return &object.Error{Message: fmt.Sprintf(format, a...)}
+}
+
+// newErrorWithLocation creates an error with location information
+func newErrorWithLocation(format string, line, col, endCol int, a ...interface{}) *object.Error {
+	return &object.Error{
+		Message:   fmt.Sprintf(format, a...),
+		Line:      line,
+		Column:    col,
+		EndColumn: endCol,
+	}
+}
+
+// newTypeMismatchError creates a rich type mismatch error
+func newTypeMismatchError(left, operator, right string, tok *ast.InfixExpression) *object.Error {
+	line := tok.Token.Line
+	col := tok.Token.Column
+	endCol := tok.Token.EndColumn
+	msg := fmt.Sprintf("type mismatch: %s %s %s", left, operator, right)
+	return &object.Error{
+		Message:   msg,
+		Line:      line,
+		Column:    col,
+		EndColumn: endCol,
+	}
+}
+
+// FormatRichError formats an object.Error into a rich error display
+func FormatRichError(err *object.Error) string {
+	if currentContext == nil || err.Line == 0 {
+		return err.Inspect()
+	}
+
+	loc := errors.SourceLocation{
+		Line:      err.Line,
+		Column:    err.Column,
+		EndColumn: err.EndColumn,
+		Filename:  currentContext.Filename,
+	}
+
+	richErr := errors.NewRuntimeError(err.Message, loc, currentContext.SourceCode)
+
+	// Add context-specific help and notes based on error message
+	msg := err.Message
+	if strings.Contains(msg, "type mismatch") {
+		richErr.WithNote("Victoria is a dynamically typed language, but operators require compatible types")
+		if strings.Contains(msg, "STRING") && strings.Contains(msg, "INTEGER") {
+			richErr.WithHelp("use str() to convert integers to strings, or parse() to convert strings to integers")
+		}
+	} else if strings.Contains(msg, "identifier not found") {
+		name := strings.TrimPrefix(msg, "identifier not found: ")
+		richErr.WithCode("E0002")
+		richErr.WithHelp(fmt.Sprintf("did you mean to declare '%s' with 'let %s = ...'?", name, name))
+	} else if strings.Contains(msg, "index operator not supported") {
+		richErr.WithCode("E0006")
+		richErr.WithNote("only arrays, strings, and hashes support indexing")
+	} else if strings.Contains(msg, "not a function") {
+		richErr.WithCode("E0005")
+		richErr.WithHelp("only functions and builtin functions can be called")
+	} else if strings.Contains(msg, "unknown operator") {
+		richErr.WithCode("E0003")
+	}
+
+	return richErr.Format()
 }
 
 func isError(obj object.Object) bool {

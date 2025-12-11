@@ -1,0 +1,74 @@
+// ============================================================
+// Victoria Language - Rust-Inspired Error Messages Demo
+// ============================================================
+// 
+// Victoria features beautiful, developer-friendly error messages
+// inspired by the Rust programming language. This file contains
+// commented-out code examples that trigger different error types.
+//
+// HOW TO USE:
+// 1. Uncomment ONE section at a time
+// 2. Run: victoria error_demo.vc
+// 3. Observe the helpful, colorful error output
+// 4. Re-comment and try another section
+//
+// ============================================================
+
+// ============================================
+// ERROR TYPE 1: Undefined Variable [E0002]
+// Shows: Variable name suggestions
+// ============================================
+// let result = unknownVariable + 10
+
+// ============================================
+// ERROR TYPE 2: Type Mismatch [E0001]
+// Shows: Type conversion hints
+// ============================================
+// let x = "hello" + 42
+
+// ============================================
+// ERROR TYPE 3: Calling Non-Function [E0005]
+// Shows: What types can be called
+// ============================================
+// let num = 100
+// num()
+
+// ============================================
+// ERROR TYPE 4: Index on Non-Indexable [E0006]
+// Shows: What types support indexing
+// ============================================
+// let value = 42
+// let item = value[0]
+
+// ============================================
+// ERROR TYPE 5: Missing Assignment [E0004]
+// Shows: Variable declaration syntax help
+// ============================================
+// let incomplete
+
+// ============================================
+// ERROR TYPE 6: Unexpected Token [E0100]
+// Shows: Syntax error location
+// ============================================
+// let x = 5 + +
+
+// ============================================
+// WORKING CODE - Runs without errors
+// ============================================
+print("===========================================")
+print("  Victoria Rust-Inspired Error Demo")
+print("===========================================")
+print("")
+print("This demo showcases Victoria's error system,")
+print("inspired by the Rust programming language.")
+print("")
+print("Uncomment the error examples above to see")
+print("beautiful, helpful error messages!")
+print("")
+print("Features:")
+print("  - Color-coded output")
+print("  - Precise line and column numbers")
+print("  - Code snippets with visual markers")
+print("  - Actionable fix suggestions")
+print("  - Error codes for reference")
+print("===========================================")

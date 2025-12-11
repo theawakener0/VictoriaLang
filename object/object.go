@@ -84,7 +84,10 @@ func (rv *ReturnValue) Type() ObjectType { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string  { return rv.Value.Inspect() }
 
 type Error struct {
-	Message string
+	Message   string
+	Line      int
+	Column    int
+	EndColumn int
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }

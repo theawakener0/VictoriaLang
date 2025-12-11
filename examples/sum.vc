@@ -4,7 +4,7 @@ let n = int(input("Enter n: "))
 
 let sum = define(n) {
     let sum_n = 0
-    for (let i = 0; i <= n; i++) {
+    for i in 1..n+1 {
         sum_n += i
     }
     return sum_n

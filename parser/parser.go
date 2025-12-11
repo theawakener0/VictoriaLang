@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"victoria/ast"
+	"victoria/errors"
 	"victoria/lexer"
 	"victoria/token"
 )
@@ -64,8 +65,11 @@ type (
 )
 
 type Parser struct {
-	l      *lexer.Lexer
-	errors []string
+	l          *lexer.Lexer
+	errors     []string
+	richErrors []*errors.VictoriaError
+	sourceCode string
+	filename   string
 
 	curToken  token.Token
 	peekToken token.Token
@@ -76,8 +80,9 @@ type Parser struct {
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
-		l:      l,
-		errors: []string{},
+		l:          l,
+		errors:     []string{},
+		richErrors: []*errors.VictoriaError{},
 	}
 
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
@@ -164,9 +169,56 @@ func (p *Parser) Errors() []string {
 	return p.errors
 }
 
+// RichErrors returns the rich error objects for formatted output
+func (p *Parser) RichErrors() []*errors.VictoriaError {
+	return p.richErrors
+}
+
+// SetSource sets the source code for error reporting
+func (p *Parser) SetSource(source string, filename string) {
+	p.sourceCode = source
+	p.filename = filename
+}
+
+// HasErrors returns true if there are any errors
+func (p *Parser) HasErrors() bool {
+	return len(p.errors) > 0 || len(p.richErrors) > 0
+}
+
 func (p *Parser) peekError(t token.TokenType) {
-	msg := fmt.Sprintf("Line %d: Expected '%s' but found '%s'", p.peekToken.Line, t, p.peekToken.Type)
+	msg := fmt.Sprintf("expected '%s' but found '%s'", t, p.peekToken.Type)
 	p.errors = append(p.errors, msg)
+
+	loc := errors.SourceLocation{
+		Line:      p.peekToken.Line,
+		Column:    p.peekToken.Column,
+		EndColumn: p.peekToken.EndColumn,
+		Filename:  p.filename,
+	}
+	richErr := errors.UnexpectedTokenError(string(t), string(p.peekToken.Type), loc, p.sourceCode)
+
+	// Add context-specific help
+	switch t {
+	case token.RBRACE:
+		richErr.WithHelp("you might be missing a closing brace '}'")
+	case token.RPAREN:
+		richErr.WithHelp("you might be missing a closing parenthesis ')'")
+	case token.RBRACKET:
+		richErr.WithHelp("you might be missing a closing bracket ']'")
+	case token.ASSIGN:
+		richErr.WithHelp("variable declarations require an initial value: let name = value")
+	case token.LBRACE:
+		richErr.WithHelp("expected a block starting with '{'")
+	case token.IDENT:
+		richErr.WithHelp("expected an identifier (variable or function name)")
+	}
+
+	// Add note about what was found
+	if p.peekToken.Type == token.EOF {
+		richErr.WithNote("reached end of file unexpectedly")
+	}
+
+	p.richErrors = append(p.richErrors, richErr)
 }
 
 func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
@@ -554,6 +606,17 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	if err != nil {
 		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
 		p.errors = append(p.errors, msg)
+
+		loc := errors.SourceLocation{
+			Line:      p.curToken.Line,
+			Column:    p.curToken.Column,
+			EndColumn: p.curToken.EndColumn,
+			Filename:  p.filename,
+		}
+		richErr := errors.ParseError(fmt.Sprintf("invalid integer literal '%s'", p.curToken.Literal), loc, p.sourceCode).
+			WithCode("E0103").
+			WithHelp("integers must be valid numeric values within the supported range")
+		p.richErrors = append(p.richErrors, richErr)
 		return nil
 	}
 
@@ -568,6 +631,17 @@ func (p *Parser) parseFloatLiteral() ast.Expression {
 	if err != nil {
 		msg := fmt.Sprintf("could not parse %q as float", p.curToken.Literal)
 		p.errors = append(p.errors, msg)
+
+		loc := errors.SourceLocation{
+			Line:      p.curToken.Line,
+			Column:    p.curToken.Column,
+			EndColumn: p.curToken.EndColumn,
+			Filename:  p.filename,
+		}
+		richErr := errors.ParseError(fmt.Sprintf("invalid float literal '%s'", p.curToken.Literal), loc, p.sourceCode).
+			WithCode("E0104").
+			WithHelp("floats must be valid numeric values like 3.14 or 0.5")
+		p.richErrors = append(p.richErrors, richErr)
 		return nil
 	}
 
@@ -1127,6 +1201,30 @@ func (p *Parser) parseRangeExpression(start ast.Expression) ast.Expression {
 }
 
 func (p *Parser) noPrefixParseFnError(t token.TokenType) {
-	msg := fmt.Sprintf("no prefix parse function for %s found", t)
+	msg := fmt.Sprintf("unexpected token '%s'", t)
 	p.errors = append(p.errors, msg)
+
+	loc := errors.SourceLocation{
+		Line:      p.curToken.Line,
+		Column:    p.curToken.Column,
+		EndColumn: p.curToken.EndColumn,
+		Filename:  p.filename,
+	}
+
+	var help string
+	switch t {
+	case token.RBRACE:
+		help = "you might have an extra closing brace '}'"
+	case token.RPAREN:
+		help = "you might have an extra closing parenthesis ')'"
+	case token.RBRACKET:
+		help = "you might have an extra closing bracket ']'"
+	case token.ASSIGN:
+		help = "did you forget to declare a variable with 'let'?"
+	default:
+		help = "check your syntax around this location"
+	}
+
+	richErr := errors.ParseError(fmt.Sprintf("unexpected token '%s'", t), loc, p.sourceCode).WithHelp(help)
+	p.richErrors = append(p.richErrors, richErr)
 }

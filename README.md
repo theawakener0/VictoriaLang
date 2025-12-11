@@ -15,6 +15,7 @@
 - **First-Class Functions**: Functions are values that can be passed around and returned.
 - **Object-Oriented**: Support for `structs` and methods to organize your code.
 - **Dynamic Typing**: No need to declare types explicitly.
+- **Rust-Style Error Messages**: Beautiful, helpful error messages with code snippets and suggestions.
 - **Rich Standard Library**: Built-in support for strings, arrays, hashes, and networking.
 - **Versatile Loops**: Supports `for`, `for-in`, `while` loops with `break`/`continue`.
 - **Modern Operators**: Ternary operator, compound assignments (`+=`, `-=`, `++`, `--`).
@@ -102,6 +103,63 @@ Key topics include:
 - [Structs](docs/LANGUAGE.md#structs)
 - [Built-in Functions](docs/LANGUAGE.md#built-in-functions)
 
+## 🎯 Rust-Inspired Error Messages
+
+Victoria features beautiful, developer-friendly error messages **inspired by the Rust programming language**. We believe that clear, actionable error messages are essential for developer productivity and learning. Our error system draws from Rust's legendary compiler diagnostics to provide:
+
+### Key Features
+
+- **🎨 Color-coded output** - Errors in red, context in cyan, help in green
+- **📍 Precise location tracking** - Line and column numbers pinpoint exactly where issues occur
+- **📝 Inline code snippets** - See the problematic code directly in the terminal
+- **👆 Visual markers** - Carets (`^`) point to the exact error location
+- **💡 Actionable suggestions** - Context-aware help tells you how to fix the problem
+- **🔢 Error codes** - Reference codes (like `E0002`) for easy documentation lookup
+- **📝 Notes** - Additional context explaining why the error occurred
+
+### Example Error Output
+
+```
+error[E0002]: identifier not found: unknownVar
+ --> main.vc:4:9
+  |
+3 | // Using undefined variable
+4 | let x = unknownVar + 5
+  |         ^^^^^^^^^^ identifier not found: unknownVar
+5 |
+  |
+  = help: did you mean to declare 'unknownVar' with 'let unknownVar = ...'?
+```
+
+### Type Mismatch Example
+
+```
+error: type mismatch: STRING + INTEGER
+ --> main.vc:2:18
+  |
+1 | let name = "hello"
+2 | let result = name + 42
+  |                  ^ type mismatch: STRING + INTEGER
+3 |
+  |
+  = note: Victoria is a dynamically typed language, but operators require compatible types
+  = help: use string() to convert integers to strings, or int() to convert strings to integers
+```
+
+### Supported Error Types
+
+| Error Code | Description |
+|------------|-------------|
+| `E0001` | Type mismatch between operands |
+| `E0002` | Undefined variable or identifier |
+| `E0003` | Unknown or unsupported operator |
+| `E0004` | Unexpected token during parsing |
+| `E0005` | Attempting to call a non-function |
+| `E0006` | Index operator on non-indexable type |
+| `E0100` | General parse error |
+| `E0101` | Illegal character in source |
+| `E0102` | Unterminated string literal |
+
 ## 💡 Examples
 
 We have a collection of examples in the `examples/` directory to help you get started:
@@ -110,6 +168,7 @@ We have a collection of examples in the `examples/` directory to help you get st
 - **[fib.vc](examples/fib.vc)**: Fibonacci sequence using recursion.
 - **[server.vc](examples/server.vc)**: A simple HTTP server.
 - **[structs.vc](examples/structs.vc)**: Working with structs and methods.
+- **[error_demo.vc](examples/error_demo.vc)**: Demonstrates the Rust-style error messages.
 - **[new_features_test.vc](examples/new_features_test.vc)**: Demonstrates all modern features.
 
 See the [Examples README](examples/README.md) for a full list.

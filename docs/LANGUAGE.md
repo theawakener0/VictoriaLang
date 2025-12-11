@@ -497,3 +497,75 @@ try {
     print("Error occurred: ${err}")
 }
 ```
+
+## Rust-Inspired Error Messages
+
+Victoria provides beautiful, developer-friendly error messages **inspired by the Rust programming language**. When you make a mistake, Victoria helps you understand and fix it quickly with:
+
+### Error Message Features
+
+1. **Color-Coded Output**: Errors are highlighted in red, code context in cyan, and helpful suggestions in green.
+
+2. **Precise Source Locations**: Every error shows the exact file, line number, and column where the issue occurred.
+
+3. **Inline Code Snippets**: The actual source code is displayed with visual markers pointing to the problem.
+
+4. **Actionable Suggestions**: Context-aware help messages suggest how to fix common mistakes.
+
+5. **Error Codes**: Each error type has a unique code (e.g., `E0002`) for easy reference.
+
+### Example: Undefined Variable
+
+```
+error[E0002]: identifier not found: myVariable
+ --> script.vc:5:12
+  |
+4 | let x = 10
+5 | let y = myVariable + x
+  |         ^^^^^^^^^^ identifier not found: myVariable
+6 |
+  |
+  = help: did you mean to declare 'myVariable' with 'let myVariable = ...'?
+```
+
+### Example: Type Mismatch
+
+```
+error: type mismatch: STRING + INTEGER
+ --> script.vc:3:20
+  |
+2 | let greeting = "Hello"
+3 | let result = greeting + 42
+  |                      ^ type mismatch: STRING + INTEGER
+4 |
+  |
+  = note: Victoria is a dynamically typed language, but operators require compatible types
+  = help: use string() to convert integers to strings, or int() to convert strings to integers
+```
+
+### Example: Syntax Error
+
+```
+error[E0004]: expected '=' but found 'EOF'
+ --> script.vc:2:1
+  |
+1 | let x
+2 |
+  | ^ expected '=' here
+  |
+  = note: reached end of file unexpectedly
+  = help: variable declarations require an initial value: let name = value
+```
+
+### Common Error Codes
+
+| Code | Description | Common Cause |
+|------|-------------|-------------|
+| `E0001` | Type mismatch | Mixing incompatible types in operations |
+| `E0002` | Undefined identifier | Using a variable before declaring it |
+| `E0003` | Unknown operator | Using an operator that doesn't exist for a type |
+| `E0004` | Unexpected token | Syntax error or missing punctuation |
+| `E0005` | Not a function | Trying to call something that isn't a function |
+| `E0006` | Cannot index | Using `[]` on a type that doesn't support indexing |
+
+These error messages are designed to help developers—especially those learning to program—understand what went wrong and how to fix it, just like the Rust compiler does.
