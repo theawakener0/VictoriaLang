@@ -1,0 +1,9 @@
+// Test const reassignment error
+const PI = 3.14
+print("PI = ")
+print(PI)
+
+// This should cause an error
+print("Trying to reassign PI...")
+PI = 3.0
+print("Should not reach here")

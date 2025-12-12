@@ -41,34 +41,69 @@
 // let item = value[0]
 
 // ============================================
-// ERROR TYPE 5: Missing Assignment [E0004]
-// Shows: Variable declaration syntax help
+// ERROR TYPE 5: Common Typos - Helpful Suggestions!
+// Try each one individually:
 // ============================================
-// let incomplete
+// let x = println("hello")      // -> use 'print'
+// let y = str(42)               // -> use 'string'
+// let z = nil                   // -> use 'null'
+// let f = function              // -> use 'define'
+// let arr = append([1,2], 3)    // -> use 'push'
+// let l = length([1,2,3])       // -> use 'len'
 
 // ============================================
-// ERROR TYPE 6: Unexpected Token [E0100]
-// Shows: Syntax error location
+// ERROR TYPE 6: Array/Hash Errors
 // ============================================
-// let x = 5 + +
+// let arr = [1, 2, 3]
+// arr(0)                        // Should use arr[0]
+
+// ============================================
+// ERROR TYPE 7: String Type Mismatch
+// Shows: Detailed conversion help
+// ============================================
+// let msg = "Count: " + 42      // Suggests string()
+
+// ============================================
+// ERROR TYPE 8: Reduce Empty Array [E0021]
+// Shows: Initial value required
+// ============================================
+// let empty = []
+// let sum_fn = define(a, b) { a + b }
+// let result = reduce(empty, sum_fn)  // Needs initial value
+
+// ============================================
+// ERROR TYPE 9: Hash Key Error [E0013]
+// Shows: Hashable type requirements
+// ============================================
+// let bad_hash = { [1,2]: "value" }  // Arrays can't be keys
+
+// ============================================
+// ERROR TYPE 10: Wrong Number of Arguments [E0010]
+// Shows: Function signature help
+// ============================================
+// let x = len()                 // len() requires 1 argument
+// let y = push([1,2])           // push() requires 2 arguments
 
 // ============================================
 // WORKING CODE - Runs without errors
 // ============================================
-print("===========================================")
-print("  Victoria Rust-Inspired Error Demo")
-print("===========================================")
-print("")
-print("This demo showcases Victoria's error system,")
-print("inspired by the Rust programming language.")
-print("")
-print("Uncomment the error examples above to see")
-print("beautiful, helpful error messages!")
-print("")
-print("Features:")
-print("  - Color-coded output")
-print("  - Precise line and column numbers")
-print("  - Code snippets with visual markers")
-print("  - Actionable fix suggestions")
-print("  - Error codes for reference")
-print("===========================================")
+print("+==========================================+")
+print("|   Victoria Rust-Inspired Error Demo      |")
+print("+==========================================+")
+print("|                                          |")
+print("|  This demo showcases Victoria's error    |")
+print("|  system, inspired by Rust's compiler.    |")
+print("|                                          |")
+print("|  Features:                               |")
+print("|    * Color-coded output                  |")
+print("|    * Precise line and column numbers     |")
+print("|    * Code snippets with visual markers   |")
+print("|    * Actionable fix suggestions          |")
+print("|    * Error codes for reference           |")
+print("|    * Smart typo detection                |")
+print("|    * Context-aware help messages         |")
+print("|                                          |")
+print("|  Uncomment the examples above to see     |")
+print("|  beautiful, helpful error messages!      |")
+print("|                                          |")
+print("+==========================================+")

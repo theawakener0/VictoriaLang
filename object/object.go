@@ -11,22 +11,23 @@ import (
 type ObjectType string
 
 const (
-	INTEGER_OBJ      = "INTEGER"
-	FLOAT_OBJ        = "FLOAT"
-	BOOLEAN_OBJ      = "BOOLEAN"
-	NULL_OBJ         = "NULL"
-	RETURN_VALUE_OBJ = "RETURN_VALUE"
-	ERROR_OBJ        = "ERROR"
-	FUNCTION_OBJ     = "FUNCTION"
-	STRING_OBJ       = "STRING"
-	BUILTIN_OBJ      = "BUILTIN"
-	ARRAY_OBJ        = "ARRAY"
-	HASH_OBJ         = "HASH"
-	STRUCT_OBJ       = "STRUCT"          // The struct definition
-	INSTANCE_OBJ     = "STRUCT_INSTANCE" // The instance
-	BREAK_OBJ        = "BREAK"
-	CONTINUE_OBJ     = "CONTINUE"
-	RANGE_OBJ        = "RANGE"
+	INTEGER_OBJ        = "INTEGER"
+	FLOAT_OBJ          = "FLOAT"
+	BOOLEAN_OBJ        = "BOOLEAN"
+	NULL_OBJ           = "NULL"
+	RETURN_VALUE_OBJ   = "RETURN_VALUE"
+	ERROR_OBJ          = "ERROR"
+	FUNCTION_OBJ       = "FUNCTION"
+	ARROW_FUNCTION_OBJ = "ARROW_FUNCTION"
+	STRING_OBJ         = "STRING"
+	BUILTIN_OBJ        = "BUILTIN"
+	ARRAY_OBJ          = "ARRAY"
+	HASH_OBJ           = "HASH"
+	STRUCT_OBJ         = "STRUCT"          // The struct definition
+	INSTANCE_OBJ       = "STRUCT_INSTANCE" // The instance
+	BREAK_OBJ          = "BREAK"
+	CONTINUE_OBJ       = "CONTINUE"
+	RANGE_OBJ          = "RANGE"
 )
 
 type Object interface {
@@ -112,6 +113,32 @@ func (f *Function) Inspect() string {
 	out.WriteString(") {\n")
 	out.WriteString(f.Body.String())
 	out.WriteString("\n}")
+	return out.String()
+}
+
+// ArrowFunction represents a lambda shorthand: x => x * 2
+type ArrowFunction struct {
+	Parameters []*ast.Identifier
+	Body       ast.Expression // Single expression body
+	Env        *Environment
+}
+
+func (af *ArrowFunction) Type() ObjectType { return ARROW_FUNCTION_OBJ }
+func (af *ArrowFunction) Inspect() string {
+	var out bytes.Buffer
+	params := []string{}
+	for _, p := range af.Parameters {
+		params = append(params, p.String())
+	}
+	if len(af.Parameters) == 1 {
+		out.WriteString(af.Parameters[0].String())
+	} else {
+		out.WriteString("(")
+		out.WriteString(strings.Join(params, ", "))
+		out.WriteString(")")
+	}
+	out.WriteString(" => ")
+	out.WriteString(af.Body.String())
 	return out.String()
 }
 
@@ -210,13 +237,15 @@ func (si *StructInstance) Inspect() string {
 }
 
 type Environment struct {
-	store map[string]Object
-	outer *Environment
+	store  map[string]Object
+	consts map[string]bool // tracks which variables are const
+	outer  *Environment
 }
 
 func NewEnvironment() *Environment {
 	s := make(map[string]Object)
-	return &Environment{store: s, outer: nil}
+	c := make(map[string]bool)
+	return &Environment{store: s, consts: c, outer: nil}
 }
 
 func NewEnclosedEnvironment(outer *Environment) *Environment {
@@ -236,6 +265,24 @@ func (e *Environment) Get(name string) (Object, bool) {
 func (e *Environment) Set(name string, val Object) Object {
 	e.store[name] = val
 	return val
+}
+
+// SetConst sets a constant variable that cannot be reassigned
+func (e *Environment) SetConst(name string, val Object) Object {
+	e.store[name] = val
+	e.consts[name] = true
+	return val
+}
+
+// IsConst checks if a variable is a constant
+func (e *Environment) IsConst(name string) bool {
+	if isConst, ok := e.consts[name]; ok && isConst {
+		return true
+	}
+	if e.outer != nil {
+		return e.outer.IsConst(name)
+	}
+	return false
 }
 
 // Update updates an existing variable in the environment chain

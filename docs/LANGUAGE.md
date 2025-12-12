@@ -5,14 +5,22 @@ Victoria is a dynamic, interpreted programming language designed for readability
 ## Table of Contents
 
 - [Variables](#variables)
+  - [Constant Variables](#constant-variables)
 - [Data Types](#data-types)
 - [Operators](#operators)
 - [Control Flow](#control-flow)
 - [Functions](#functions)
+  - [Lambda Functions (Arrow Functions)](#lambda-functions-arrow-functions)
 - [Data Structures](#data-structures)
+  - [Array Slicing](#array-slicing)
+  - [Spread Operator](#spread-operator)
 - [Structs](#structs)
 - [Modules](#modules)
+  - [Math Module](#math-module)
+  - [JSON Module](#json-module)
+  - [Time Module](#time-module)
 - [Built-in Functions](#built-in-functions)
+- [Error Handling](#error-handling)
 
 ## Variables
 
@@ -31,6 +39,23 @@ Variables can be reassigned:
 let x = 5
 x = 10  // reassignment
 ```
+
+### Constant Variables
+
+Use `const` to declare immutable variables that cannot be reassigned:
+
+```victoria
+const PI = 3.14159
+const MAX_SIZE = 100
+const APP_NAME = "Victoria Lang"
+
+print(PI)       // 3.14159
+
+// Attempting to reassign a const will cause an error:
+PI = 3.0        // ERROR: cannot reassign constant variable: PI
+```
+
+Constants are useful for values that should never change, like configuration values, mathematical constants, or API keys.
 
 ## Data Types
 
@@ -322,6 +347,46 @@ let double = define(n) { n * 2 }
 print(applyTwice(double, 5))  // 20
 ```
 
+### Lambda Functions (Arrow Functions)
+
+Victoria supports a concise lambda syntax using the `=>` operator, perfect for short functions:
+
+```victoria
+// Single parameter lambda
+let double = x => x * 2
+print(double(5))  // 10
+
+// Multiple parameters (use parentheses)
+let add = (x, y) => x + y
+print(add(3, 4))  // 7
+
+// No parameters
+let getAnswer = () => 42
+print(getAnswer())  // 42
+```
+
+Lambda functions are ideal for use with `map`, `filter`, and `reduce`:
+
+```victoria
+let numbers = [1, 2, 3, 4, 5]
+
+// Map: transform each element
+let doubled = map(numbers, x => x * 2)
+print(doubled)  // [2, 4, 6, 8, 10]
+
+// Filter: keep elements matching condition
+let evens = filter(numbers, x => x % 2 == 0)
+print(evens)  // [2, 4]
+
+// Reduce: accumulate values
+let sum = reduce(numbers, (acc, x) => acc + x, 0)
+print(sum)  // 15
+
+// Chain operations
+let result = map(filter(numbers, x => x > 2), x => x * 10)
+print(result)  // [30, 40, 50]
+```
+
 ## Data Structures
 
 ### Arrays
@@ -347,6 +412,60 @@ print(evens)  // [2, 4]
 // reduce - accumulate values
 let sum = reduce(nums, define(acc, x) { acc + x }, 0)
 print(sum)  // 15
+```
+
+#### Array Slicing
+
+Extract portions of arrays using slice syntax `[start:end]`:
+
+```victoria
+let arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Get elements from index 2 to 5 (exclusive)
+print(arr[2:5])   // [3, 4, 5]
+
+// Get elements from start to index 3
+print(arr[:3])    // [1, 2, 3]
+
+// Get elements from index 5 to end
+print(arr[5:])    // [6, 7, 8, 9, 10]
+
+// Negative indexing (from end)
+print(arr[-3:])   // [8, 9, 10]
+print(arr[:-2])   // [1, 2, 3, 4, 5, 6, 7, 8]
+
+// String slicing also works
+let str = "Hello, World!"
+print(str[0:5])   // "Hello"
+print(str[7:])    // "World!"
+print(str[-6:])   // "World!"
+```
+
+#### Spread Operator
+
+Use the spread operator `...` to expand arrays:
+
+```victoria
+let arr1 = [1, 2, 3]
+let arr2 = [4, 5, 6]
+
+// Merge arrays
+let merged = [...arr1, ...arr2]
+print(merged)     // [1, 2, 3, 4, 5, 6]
+
+// Add elements around spread
+let extended = [0, ...arr1, 99, ...arr2, 100]
+print(extended)   // [0, 1, 2, 3, 99, 4, 5, 6, 100]
+
+// Copy an array
+let original = [10, 20, 30]
+let copy = [...original]
+print(copy)       // [10, 20, 30]
+
+// Combine with slicing
+let arr = [1, 2, 3, 4, 5]
+let combined = [...arr[:2], ...arr[3:]]
+print(combined)   // [1, 2, 4, 5]
 ```
 
 ### Hashes
@@ -406,14 +525,207 @@ You can include other Victoria files or built-in modules using `include`.
 ```victoria
 include "net"        // Built-in network module
 include "os"         // Built-in OS module  
+include "math"       // Built-in math module
+include "json"       // Built-in JSON module
+include "time"       // Built-in time/date module
 include "./mylib.vc" // Local file
+```
+
+Multiple modules can be included at once:
+
+```victoria
+include ("os", "math", "json", "time")
 ```
 
 ### Available Modules
 
 - `os`: File system operations (`readFile`, `writeFile`, `exists`, etc.)
 - `net`: Networking (`http.get`, `http.post`, `tcp.connect`, etc.)
-- `math`: Math functions (`abs`, `sqrt`, `pow`, `sin`, `cos`, etc.)
+- `math`: Math functions (`abs`, `sqrt`, `pow`, `sin`, `cos`, `floor`, `ceil`, `round`, `min`, `max`, `random`, etc.)
+- `json`: JSON parsing and serialization (`parse`, `stringify`, `valid`)
+- `time`: Date/time operations (`now`, `format`, `parse`, `date`, `time`, etc.)
+- `std`: Standard utilities (common functions)
+
+### Math Module
+
+The math module provides mathematical constants and functions.
+
+```victoria
+include "math"
+
+// Constants
+print(math.pi)   // 3.141592653589793
+print(math.e)    // 2.718281828459045
+
+// Basic functions
+print(math.abs(-5))      // 5
+print(math.sqrt(16))     // 4
+print(math.pow(2, 10))   // 1024
+
+// Trigonometric functions
+print(math.sin(0))       // 0
+print(math.cos(0))       // 1
+print(math.tan(0))       // 0
+
+// Rounding functions
+print(math.floor(3.7))   // 3
+print(math.ceil(3.2))    // 4
+print(math.round(3.5))   // 4
+
+// Min/Max (accepts multiple arguments)
+print(math.min(5, 3, 8, 1))   // 1
+print(math.max(5, 3, 8, 1))   // 8
+
+// Random numbers
+print(math.random())          // Random float 0-1
+print(math.random(10))        // Random int 0-9
+print(math.random(1, 6))      // Random int 1-6 (dice roll)
+
+// Logarithmic functions
+print(math.log(2.718281828))  // ~1 (natural log)
+print(math.log10(100))        // 2
+```
+
+| Function | Description |
+|----------|-------------|
+| `math.pi` | Pi constant (3.14159...) |
+| `math.e` | Euler's number (2.71828...) |
+| `math.abs(x)` | Absolute value |
+| `math.sqrt(x)` | Square root |
+| `math.pow(x, y)` | x raised to power y |
+| `math.sin(x)` | Sine (radians) |
+| `math.cos(x)` | Cosine (radians) |
+| `math.tan(x)` | Tangent (radians) |
+| `math.floor(x)` | Round down to integer |
+| `math.ceil(x)` | Round up to integer |
+| `math.round(x)` | Round to nearest integer |
+| `math.min(a, b, ...)` | Minimum of values |
+| `math.max(a, b, ...)` | Maximum of values |
+| `math.random()` | Random float 0-1 |
+| `math.random(n)` | Random integer 0 to n-1 |
+| `math.random(min, max)` | Random integer min to max (inclusive) |
+| `math.log(x)` | Natural logarithm |
+| `math.log10(x)` | Base-10 logarithm |
+
+### JSON Module
+
+The JSON module provides functions for parsing and serializing JSON data.
+
+```victoria
+include "json"
+
+// Parse JSON string to Victoria object
+let jsonStr = `{"name": "Victoria", "version": 1.0}`
+let obj = json.parse(jsonStr)
+print(obj["name"])     // Victoria
+print(obj["version"])  // 1
+
+// Stringify Victoria object to JSON
+let data = {
+    "language": "Victoria",
+    "year": 2024,
+    "active": true,
+    "tags": ["fast", "simple"]
+}
+print(json.stringify(data))
+// {"active":true,"language":"Victoria","tags":["fast","simple"],"year":2024}
+
+// Pretty print with indentation
+print(json.stringify(data, 2))
+// {
+//   "active": true,
+//   "language": "Victoria",
+//   ...
+// }
+
+// Validate JSON string
+print(json.valid(`{"valid": true}`))  // true
+print(json.valid("not json"))         // false
+```
+
+| Function | Description |
+|----------|-------------|
+| `json.parse(str)` | Parse JSON string to Victoria object |
+| `json.stringify(obj)` | Convert object to JSON string |
+| `json.stringify(obj, indent)` | Convert with pretty printing (indent = spaces or string) |
+| `json.valid(str)` | Check if string is valid JSON |
+
+### Time Module
+
+The time module provides functions for working with dates and times.
+
+```victoria
+include "time"
+
+// Get current timestamp (Unix seconds)
+let now = time.now()
+print(now)  // e.g., 1702400000
+
+// Get current timestamp in milliseconds
+let nowMs = time.nowMs()
+print(nowMs)  // e.g., 1702400000123
+
+// Format timestamp to string
+print(time.format(now))                    // "2024-12-12 10:30:00"
+print(time.format(now, "YYYY-MM-DD"))      // "2024-12-12"
+print(time.format(now, "HH:mm:ss"))        // "10:30:00"
+
+// Parse date string to timestamp
+let ts = time.parse("2024-12-25 10:30:00")
+print(ts)  // Unix timestamp
+
+// Get date/time components
+print(time.year(now))     // 2024
+print(time.month(now))    // 12
+print(time.day(now))      // 12
+print(time.hour(now))     // 10
+print(time.minute(now))   // 30
+print(time.second(now))   // 0
+print(time.weekday(now))  // 0-6 (0=Sunday)
+
+// Quick date/time strings
+print(time.date())        // "2024-12-12"
+print(time.time())        // "10:30:00"
+print(time.date(now))     // Date of timestamp
+print(time.time(now))     // Time of timestamp
+
+// Sleep (pause execution)
+time.sleep(1000)  // Sleep for 1000 milliseconds (1 second)
+```
+
+| Function | Description |
+|----------|-------------|
+| `time.now()` | Current Unix timestamp (seconds) |
+| `time.nowMs()` | Current timestamp (milliseconds) |
+| `time.format(ts)` | Format timestamp as "YYYY-MM-DD HH:mm:ss" |
+| `time.format(ts, fmt)` | Format with custom format string |
+| `time.parse(str)` | Parse date string to timestamp |
+| `time.parse(str, fmt)` | Parse with custom format string |
+| `time.year(ts)` | Get year from timestamp |
+| `time.month(ts)` | Get month (1-12) |
+| `time.day(ts)` | Get day of month (1-31) |
+| `time.hour(ts)` | Get hour (0-23) |
+| `time.minute(ts)` | Get minute (0-59) |
+| `time.second(ts)` | Get second (0-59) |
+| `time.weekday(ts)` | Get weekday (0=Sunday, 6=Saturday) |
+| `time.date()` | Current date as "YYYY-MM-DD" |
+| `time.time()` | Current time as "HH:mm:ss" |
+| `time.sleep(ms)` | Pause execution for milliseconds |
+
+#### Format Tokens
+
+| Token | Description | Example |
+|-------|-------------|---------|
+| `YYYY` | 4-digit year | 2024 |
+| `YY` | 2-digit year | 24 |
+| `MM` | 2-digit month | 01-12 |
+| `DD` | 2-digit day | 01-31 |
+| `HH` | 24-hour hour | 00-23 |
+| `hh` | 12-hour hour | 01-12 |
+| `mm` | Minute | 00-59 |
+| `ss` | Second | 00-59 |
+| `A` | AM/PM | AM, PM |
+| `a` | am/pm | am, pm |
 
 ## Built-in Functions
 
@@ -563,9 +875,44 @@ error[E0004]: expected '=' but found 'EOF'
 |------|-------------|-------------|
 | `E0001` | Type mismatch | Mixing incompatible types in operations |
 | `E0002` | Undefined identifier | Using a variable before declaring it |
-| `E0003` | Unknown operator | Using an operator that doesn't exist for a type |
+| `E0003` | Unknown operator | Using an operator not defined for a type |
 | `E0004` | Unexpected token | Syntax error or missing punctuation |
 | `E0005` | Not a function | Trying to call something that isn't a function |
 | `E0006` | Cannot index | Using `[]` on a type that doesn't support indexing |
+| `E0007` | Division by zero | Dividing by zero |
+| `E0008` | Property not found | Accessing a non-existent property |
+| `E0009` | Struct not found | Using an undefined struct |
+| `E0010` | Wrong argument count | Calling a function with wrong number of args |
+| `E0011` | Invalid slice | Invalid slice indices or unsupported type |
+| `E0012` | Spread error | Spread operator on non-array or wrong context |
+| `E0013` | Invalid hash key | Using a non-hashable type as hash key |
+| `E0014` | Argument type error | Passing wrong type to a function |
+| `E0015` | Not iterable | Using for-in on non-iterable type |
+| `E0016` | Range error | Invalid range parameters |
+| `E0017` | Conversion error | Failed type conversion |
+| `E0018` | Assignment error | Invalid assignment target |
+| `E0019` | Operator error | Invalid use of ++/-- operators |
+| `E0020` | Member access error | Dot notation on unsupported type |
+| `E0021` | Empty reduce | reduce() on empty array without initial value |
+| `E0022` | Join error | join() with non-string array elements |
+| `E0100` | Parse error | General syntax/parsing error |
+| `E0101` | Illegal character | Invalid character in source |
+| `E0102` | Unterminated string | String literal missing closing quote |
+
+### Smart Typo Detection
+
+Victoria automatically suggests corrections for common mistakes from other languages:
+
+| You typed | Victoria suggests |
+|-----------|------------------|
+| `println()` | `print()` |
+| `str()` | `string()` |
+| `len()` is called `length()` or `size()` | `len()` |
+| `nil`, `None`, `undefined` | `null` |
+| `fn`, `func`, `function`, `def` | `define` |
+| `append()` | `push()` |
+| `import`, `require` | `include` |
+| `var` | `let` |
+| `elif` | `else if` |
 
 These error messages are designed to help developers—especially those learning to program—understand what went wrong and how to fix it, just like the Rust compiler does.

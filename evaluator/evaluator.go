@@ -2,14 +2,17 @@ package evaluator
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"victoria/ast"
 	"victoria/errors"
 	"victoria/lexer"
@@ -22,6 +25,11 @@ var (
 	TRUE  = &object.Boolean{Value: true}
 	FALSE = &object.Boolean{Value: false}
 )
+
+func init() {
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+}
 
 // EvalContext holds context for evaluation including source code for error messages
 type EvalContext struct {
@@ -72,6 +80,13 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return val
 		}
 		env.Set(node.Name.Value, val)
+
+	case *ast.ConstStatement:
+		val := Eval(node.Value, env)
+		if isError(val) {
+			return val
+		}
+		env.SetConst(node.Name.Value, val)
 
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -185,6 +200,11 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		body := node.Body
 		return &object.Function{Parameters: params, Env: env, Body: body}
 
+	case *ast.ArrowFunction:
+		params := node.Parameters
+		body := node.Body
+		return &object.ArrowFunction{Parameters: params, Env: env, Body: body}
+
 	case *ast.CallExpression:
 		function := Eval(node.Function, env)
 		if isError(function) {
@@ -206,7 +226,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return result
 
 	case *ast.ArrayLiteral:
-		elements := evalExpressions(node.Elements, env)
+		elements := evalArrayElements(node.Elements, env)
 		if len(elements) == 1 && isError(elements[0]) {
 			return elements[0]
 		}
@@ -229,6 +249,13 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			errObj.EndColumn = node.Token.EndColumn
 		}
 		return result
+
+	case *ast.SliceExpression:
+		return evalSliceExpression(node, env)
+
+	case *ast.SpreadExpression:
+		// Spread expressions are handled in array literals
+		return newError("spread operator can only be used in array literals")
 
 	case *ast.HashLiteral:
 		return evalHashLiteral(node, env)
@@ -659,23 +686,407 @@ func FormatRichError(err *object.Error) string {
 
 	// Add context-specific help and notes based on error message
 	msg := err.Message
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// TYPE MISMATCH ERRORS
+	// ═══════════════════════════════════════════════════════════════════════════
 	if strings.Contains(msg, "type mismatch") {
-		richErr.WithNote("Victoria is a dynamically typed language, but operators require compatible types")
+		richErr.WithCode("E0001")
+		richErr.WithNote("Victoria is dynamically typed, but operators require compatible types")
+
+		// String + Integer
 		if strings.Contains(msg, "STRING") && strings.Contains(msg, "INTEGER") {
-			richErr.WithHelp("use str() to convert integers to strings, or parse() to convert strings to integers")
+			richErr.WithNote("strings and integers cannot be combined directly with arithmetic operators")
+			richErr.WithHelp("use string() to convert integers to strings: \"text\" + string(42)")
 		}
+		// String + Float
+		if strings.Contains(msg, "STRING") && strings.Contains(msg, "FLOAT") {
+			richErr.WithNote("strings and floats cannot be combined directly")
+			richErr.WithHelp("use string() to convert floats to strings: \"value: \" + string(3.14)")
+		}
+		// Boolean + Integer/String
+		if strings.Contains(msg, "BOOLEAN") {
+			richErr.WithNote("booleans cannot be used in arithmetic operations")
+			if strings.Contains(msg, "INTEGER") {
+				richErr.WithHelp("use int() to convert boolean to integer: int(true) returns 1")
+			} else {
+				richErr.WithHelp("use string() to convert boolean to string: string(true) returns \"true\"")
+			}
+		}
+		// Array operations
+		if strings.Contains(msg, "ARRAY") {
+			richErr.WithNote("arrays can only be concatenated with other arrays using '+'")
+			richErr.WithHelp("use push() to add elements: push(arr, element)")
+		}
+		// Hash operations
+		if strings.Contains(msg, "HASH") {
+			richErr.WithNote("hashes do not support arithmetic operators")
+			richErr.WithHelp("access hash values with hash[\"key\"] or hash.key syntax")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// IDENTIFIER NOT FOUND ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
 	} else if strings.Contains(msg, "identifier not found") {
 		name := strings.TrimPrefix(msg, "identifier not found: ")
 		richErr.WithCode("E0002")
-		richErr.WithHelp(fmt.Sprintf("did you mean to declare '%s' with 'let %s = ...'?", name, name))
+		richErr.WithNote("variables must be declared before use with 'let' or 'const'")
+
+		// Common typos and suggestions - values are complete help messages
+		commonBuiltins := map[string]string{
+			// Output functions
+			"println": "use 'print' instead - Victoria uses print() for output",
+			"printf":  "use 'format' instead - Victoria uses format() for formatted strings",
+			"console": "use 'print' instead - Victoria uses print() for output",
+			"log":     "use 'print' instead - Victoria uses print() for output",
+			"echo":    "use 'print' instead - Victoria uses print() for output",
+			"puts":    "use 'print' instead - Victoria uses print() for output",
+			// Type conversions
+			"str":      "use 'string' instead - Victoria uses string() for type conversion",
+			"toString": "use 'string' instead - Victoria uses string() for type conversion",
+			"toInt":    "use 'int' instead - Victoria uses int() for type conversion",
+			"parseInt": "use 'int' instead - Victoria uses int() for type conversion",
+			// Length/size functions
+			"size":   "use 'len' instead - Victoria uses len() for collection length",
+			"length": "use 'len' instead - Victoria uses len() for collection length",
+			"count":  "use 'len' instead - Victoria uses len() for collection length",
+			// Array operations
+			"append": "use 'push' instead - Victoria uses push(array, element)",
+			"add":    "use 'push' instead - Victoria uses push(array, element)",
+			"remove": "use 'pop' instead - Victoria uses pop(array) to remove last element",
+			"delete": "use filter() to create a new array without elements",
+			// String operations
+			"substr":    "use string slicing instead: str[start:end]",
+			"substring": "use string slicing instead: str[start:end]",
+			// Iteration
+			"forEach": "use a for-in loop: for item in array { ... }",
+			"foreach": "use a for-in loop: for item in array { ... }",
+			// Function-like values
+			"map_func":  "use 'map' - Victoria has map(array, fn)",
+			"filter_fn": "use 'filter' - Victoria has filter(array, fn)",
+			"reduce_fn": "use 'reduce' - Victoria has reduce(array, fn, initial)",
+			// Keywords from other languages
+			"nil":       "use 'null' instead - Victoria uses null for no value",
+			"none":      "use 'null' instead - Victoria uses null for no value",
+			"None":      "use 'null' instead - Victoria uses null for no value",
+			"undefined": "use 'null' instead - Victoria uses null for no value",
+			"true_val":  "use 'true' - it's a built-in boolean literal",
+			"false_val": "use 'false' - it's a built-in boolean literal",
+			// Function definition alternatives
+			"fn":       "use 'define' instead - Victoria uses 'define' to create functions: let f = define(x) { x * 2 }",
+			"func":     "use 'define' instead - Victoria uses 'define' to create functions: let f = define(x) { x * 2 }",
+			"function": "use 'define' instead - Victoria uses 'define' to create functions: let f = define(x) { x * 2 }",
+			"lambda":   "use 'define' instead - Victoria uses 'define' to create functions: let f = define(x) { x * 2 }",
+			"def":      "use 'define' instead - Victoria uses 'define' to create functions: let f = define(x) { x * 2 }",
+			// Variable declaration
+			"var": "use 'let' instead - Victoria uses 'let' for variable declaration",
+			// Control flow
+			"elif":   "use 'else if' - Victoria uses 'else if' not 'elif'",
+			"elsif":  "use 'else if' - Victoria uses 'else if' not 'elsif'",
+			"elseif": "use 'else if' (with space) - Victoria uses 'else if'",
+			// Operators as identifiers (user error)
+			"and": "'and' is an operator, not a function - use it between expressions: a and b",
+			"or":  "'or' is an operator, not a function - use it between expressions: a or b",
+			"not": "use '!' for negation - Victoria uses !value not not(value)",
+			// OOP patterns
+			"self": "Victoria uses the struct instance name directly in methods",
+			"this": "Victoria uses the struct instance name directly in methods",
+			// Module system
+			"require": "use 'include' instead - Victoria uses include \"filename\"",
+			"import":  "use 'include' instead - Victoria uses include \"filename\"",
+		}
+
+		if suggestion, ok := commonBuiltins[name]; ok {
+			richErr.WithHelp(suggestion)
+		} else if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
+			// Possibly trying to use a type as a value
+			richErr.WithHelp(fmt.Sprintf("'%s' looks like a type name; did you mean to create an instance?", name))
+			richErr.WithNote("use struct instantiation: new StructName { field: value }")
+		} else {
+			richErr.WithHelp(fmt.Sprintf("declare with: let %s = <value>", name))
+			richErr.WithNote("for constants, use: const " + name + " = <value>")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// INDEX OPERATOR ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
 	} else if strings.Contains(msg, "index operator not supported") {
 		richErr.WithCode("E0006")
-		richErr.WithNote("only arrays, strings, and hashes support indexing")
+		richErr.WithNote("indexing is only supported for arrays, strings, and hashes")
+
+		if strings.Contains(msg, "INTEGER") {
+			richErr.WithHelp("integers cannot be indexed; did you mean to use an array?")
+			richErr.WithNote("example: let arr = [1, 2, 3]; arr[0] returns 1")
+		} else if strings.Contains(msg, "BOOLEAN") {
+			richErr.WithHelp("booleans cannot be indexed")
+		} else if strings.Contains(msg, "FUNCTION") {
+			richErr.WithHelp("functions cannot be indexed; call the function first with ()")
+		} else if strings.Contains(msg, "NULL") {
+			richErr.WithHelp("cannot index null; ensure the value is initialized")
+			richErr.WithNote("this often happens when accessing a missing hash key")
+		} else {
+			richErr.WithHelp("only arrays, strings, and hashes support [] indexing")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// NOT A FUNCTION ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
 	} else if strings.Contains(msg, "not a function") {
 		richErr.WithCode("E0005")
-		richErr.WithHelp("only functions and builtin functions can be called")
+
+		if strings.Contains(msg, "INTEGER") {
+			richErr.WithNote("integers cannot be called as functions")
+			richErr.WithHelp("remove the parentheses, or did you mean to use a function?")
+		} else if strings.Contains(msg, "STRING") {
+			richErr.WithNote("strings cannot be called as functions")
+			richErr.WithHelp("use string methods like split(), upper(), lower() instead")
+		} else if strings.Contains(msg, "BOOLEAN") {
+			richErr.WithNote("booleans cannot be called as functions")
+		} else if strings.Contains(msg, "ARRAY") {
+			richErr.WithNote("arrays cannot be called as functions")
+			richErr.WithHelp("use array[index] to access elements, not array(index)")
+		} else if strings.Contains(msg, "HASH") {
+			richErr.WithNote("hashes cannot be called as functions")
+			richErr.WithHelp("use hash[\"key\"] or hash.key to access values")
+		} else if strings.Contains(msg, "nil") || strings.Contains(msg, "NULL") {
+			richErr.WithNote("attempted to call null as a function")
+			richErr.WithHelp("ensure the variable is assigned a function before calling")
+		} else {
+			richErr.WithNote("only functions and builtin functions can be called")
+			richErr.WithHelp("check that the variable contains a function")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// UNKNOWN OPERATOR ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
 	} else if strings.Contains(msg, "unknown operator") {
 		richErr.WithCode("E0003")
+
+		if strings.Contains(msg, "STRING") && strings.Contains(msg, "-") {
+			richErr.WithNote("strings only support the '+' operator for concatenation")
+			richErr.WithHelp("to compare strings, use == or !=")
+		} else if strings.Contains(msg, "STRING") && (strings.Contains(msg, "*") || strings.Contains(msg, "/")) {
+			richErr.WithNote("strings do not support multiplication or division")
+			richErr.WithHelp("use string concatenation (+) or string functions instead")
+		} else if strings.Contains(msg, "BOOLEAN") {
+			richErr.WithNote("booleans only support comparison operators (==, !=)")
+			richErr.WithHelp("use 'and', 'or', '!' for boolean logic")
+		} else if strings.Contains(msg, "ARRAY") {
+			richErr.WithNote("arrays only support '+' for concatenation and == for comparison")
+			richErr.WithHelp("use array functions: push(), pop(), first(), last(), rest()")
+		} else if strings.Contains(msg, "FUNCTION") {
+			richErr.WithNote("functions can only be compared with == or !=")
+			richErr.WithHelp("call the function first to operate on its return value")
+		} else {
+			richErr.WithNote("this operator is not supported for the given types")
+			richErr.WithHelp("check the Victoria language documentation for supported operators")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// VARIABLE NOT DEFINED ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "variable not defined") {
+		name := strings.TrimPrefix(msg, "variable not defined: ")
+		richErr.WithCode("E0002")
+		richErr.WithNote("cannot modify a variable that hasn't been declared")
+		richErr.WithHelp(fmt.Sprintf("declare first: let %s = <initial_value>", name))
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// STRUCT ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "struct not found") {
+		name := strings.TrimSuffix(strings.TrimPrefix(msg, "struct not found: "), "")
+		richErr.WithCode("E0009")
+		richErr.WithNote("structs must be defined before instantiation")
+		richErr.WithHelp(fmt.Sprintf("define the struct first: struct %s { field1, field2 }", name))
+
+	} else if strings.Contains(msg, "not a struct") {
+		richErr.WithCode("E0009")
+		richErr.WithNote("'new' keyword requires a struct type")
+		richErr.WithHelp("use 'new StructName { field: value }' syntax")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// PROPERTY ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "property not found") || strings.Contains(msg, "property or method not found") {
+		richErr.WithCode("E0008")
+		richErr.WithNote("the property or method does not exist on this type")
+		richErr.WithHelp("check the spelling or use keys() to see available hash keys")
+
+	} else if strings.Contains(msg, "expected identifier after dot") {
+		richErr.WithCode("E0100")
+		richErr.WithNote("dot notation requires a property name")
+		richErr.WithHelp("use: object.propertyName or object.methodName()")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// SLICE ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "slice index must be an integer") {
+		richErr.WithCode("E0011")
+		richErr.WithNote("slice indices must be integers")
+		richErr.WithHelp("use integer values: array[0:5] or string[2:10]")
+
+	} else if strings.Contains(msg, "slice operator not supported") {
+		richErr.WithCode("E0011")
+		richErr.WithNote("slicing is only supported for arrays and strings")
+		richErr.WithHelp("syntax: array[start:end] or string[start:end]")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// SPREAD OPERATOR ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "spread operator") {
+		richErr.WithCode("E0012")
+		if strings.Contains(msg, "requires an array") {
+			richErr.WithNote("the spread operator (...) can only expand arrays")
+			richErr.WithHelp("example: [...arr1, ...arr2] combines two arrays")
+		} else {
+			richErr.WithNote("spread operator must be used inside array literals")
+			richErr.WithHelp("example: let combined = [...array1, ...array2]")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// HASH KEY ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "unusable as hash key") {
+		richErr.WithCode("E0013")
+		richErr.WithNote("hash keys must be hashable types: strings, integers, or booleans")
+		if strings.Contains(msg, "ARRAY") {
+			richErr.WithHelp("arrays cannot be hash keys; use a string identifier instead")
+		} else if strings.Contains(msg, "HASH") {
+			richErr.WithHelp("hashes cannot be hash keys; use a string identifier instead")
+		} else if strings.Contains(msg, "FUNCTION") {
+			richErr.WithHelp("functions cannot be hash keys; use a string identifier instead")
+		} else {
+			richErr.WithHelp("use a string, integer, or boolean as the hash key")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// WRONG NUMBER OF ARGUMENTS ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "wrong number of arguments") {
+		richErr.WithCode("E0010")
+		richErr.WithNote("function called with incorrect number of arguments")
+
+		// Extract function name and provide specific help
+		if strings.Contains(msg, "len") || strings.Contains(msg, "`len`") {
+			richErr.WithHelp("len() takes exactly 1 argument: len(array) or len(string)")
+		} else if strings.Contains(msg, "push") || strings.Contains(msg, "`push`") {
+			richErr.WithHelp("push() takes exactly 2 arguments: push(array, element)")
+		} else if strings.Contains(msg, "pop") || strings.Contains(msg, "`pop`") {
+			richErr.WithHelp("pop() takes exactly 1 argument: pop(array)")
+		} else if strings.Contains(msg, "split") || strings.Contains(msg, "`split`") {
+			richErr.WithHelp("split() takes exactly 2 arguments: split(string, delimiter)")
+		} else if strings.Contains(msg, "join") || strings.Contains(msg, "`join`") {
+			richErr.WithHelp("join() takes exactly 2 arguments: join(array, separator)")
+		} else if strings.Contains(msg, "map") || strings.Contains(msg, "`map`") {
+			richErr.WithHelp("map() takes exactly 2 arguments: map(array, fn)")
+		} else if strings.Contains(msg, "filter") || strings.Contains(msg, "`filter`") {
+			richErr.WithHelp("filter() takes exactly 2 arguments: filter(array, predicate)")
+		} else if strings.Contains(msg, "reduce") || strings.Contains(msg, "`reduce`") {
+			richErr.WithHelp("reduce() takes 2 or 3 arguments: reduce(array, fn) or reduce(array, fn, initial)")
+		} else if strings.Contains(msg, "range") || strings.Contains(msg, "`range`") {
+			richErr.WithHelp("range() takes 1-3 arguments: range(end), range(start, end), or range(start, end, step)")
+		} else if strings.Contains(msg, "format") || strings.Contains(msg, "`format`") {
+			richErr.WithHelp("format() takes at least 1 argument: format(template, ...values)")
+		} else {
+			richErr.WithHelp("check the function signature for the correct number of arguments")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// ARGUMENT TYPE ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "argument to") && strings.Contains(msg, "must be") {
+		richErr.WithCode("E0014")
+		richErr.WithNote("function received an argument of the wrong type")
+
+		if strings.Contains(msg, "must be ARRAY") {
+			richErr.WithHelp("pass an array: [1, 2, 3] or a variable containing an array")
+		} else if strings.Contains(msg, "must be STRING") {
+			richErr.WithHelp("pass a string: \"text\" or a variable containing a string")
+		} else if strings.Contains(msg, "must be INTEGER") {
+			richErr.WithHelp("pass an integer: 42 or a variable containing an integer")
+		} else if strings.Contains(msg, "must be FUNCTION") {
+			richErr.WithHelp("pass a function: fn(x) { x * 2 } or a named function")
+		} else if strings.Contains(msg, "must be HASH") {
+			richErr.WithHelp("pass a hash: {\"key\": \"value\"} or a variable containing a hash")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// ITERATION ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "not iterable") {
+		richErr.WithCode("E0015")
+		richErr.WithNote("for-in loops require an iterable value")
+
+		if strings.Contains(msg, "INTEGER") {
+			richErr.WithHelp("use range() to iterate over numbers: for i in range(10) { ... }")
+		} else if strings.Contains(msg, "STRING") {
+			// Strings ARE iterable in Victoria, so this shouldn't happen, but just in case
+			richErr.WithHelp("strings are iterable character by character")
+		} else {
+			richErr.WithHelp("iterable types: arrays, strings, hashes, and ranges")
+		}
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// RANGE ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "range") && strings.Contains(msg, "must be") {
+		richErr.WithCode("E0016")
+		richErr.WithNote("range values must be integers")
+		richErr.WithHelp("use: range(10), range(1, 10), or range(0, 100, 5)")
+
+	} else if strings.Contains(msg, "range step cannot be zero") {
+		richErr.WithCode("E0016")
+		richErr.WithNote("step value determines the increment between range values")
+		richErr.WithHelp("use a positive step for ascending: range(0, 10, 2)")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// PARSE ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "could not parse") && strings.Contains(msg, "as integer") {
+		richErr.WithCode("E0017")
+		richErr.WithNote("string could not be converted to an integer")
+		richErr.WithHelp("ensure the string contains only numeric characters: \"123\" not \"12.3\" or \"abc\"")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// ASSIGNMENT ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "assignment to non-identifier") {
+		richErr.WithCode("E0018")
+		richErr.WithNote("can only assign to variable names")
+		richErr.WithHelp("use: variableName = value, not expressions like (a + b) = value")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// PREFIX/POSTFIX ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "operator on non-identifier") {
+		richErr.WithCode("E0019")
+		richErr.WithNote("increment/decrement operators require a variable")
+		richErr.WithHelp("use: i++ or ++i where i is a variable name")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// DOT OPERATOR ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "dot operator not supported") {
+		richErr.WithCode("E0020")
+		richErr.WithNote("dot notation is only for hashes, structs, and objects with methods")
+		richErr.WithHelp("use hash[\"key\"] for dynamic keys, or define a struct for complex types")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// REDUCE ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "reduce of empty array with no initial value") {
+		richErr.WithCode("E0021")
+		richErr.WithNote("reduce() needs an initial value when the array is empty")
+		richErr.WithHelp("provide an initial value: reduce([], fn, 0)")
+
+		// ═══════════════════════════════════════════════════════════════════════════
+		// JOIN ERRORS
+		// ═══════════════════════════════════════════════════════════════════════════
+	} else if strings.Contains(msg, "array elements must be strings") {
+		richErr.WithCode("E0022")
+		richErr.WithNote("join() requires all array elements to be strings")
+		richErr.WithHelp("convert elements first: map(arr, fn(x) { string(x) })")
 	}
 
 	return richErr.Format()
@@ -702,6 +1113,157 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 	return result
 }
 
+// evalArrayElements evaluates array elements, handling spread expressions
+func evalArrayElements(exps []ast.Expression, env *object.Environment) []object.Object {
+	var result []object.Object
+
+	for _, e := range exps {
+		// Check if it's a spread expression
+		if spread, ok := e.(*ast.SpreadExpression); ok {
+			evaluated := Eval(spread.Right, env)
+			if isError(evaluated) {
+				return []object.Object{evaluated}
+			}
+			// The spread expression must evaluate to an array
+			if arr, ok := evaluated.(*object.Array); ok {
+				result = append(result, arr.Elements...)
+			} else {
+				return []object.Object{newError("spread operator requires an array, got %s", evaluated.Type())}
+			}
+		} else {
+			evaluated := Eval(e, env)
+			if isError(evaluated) {
+				return []object.Object{evaluated}
+			}
+			result = append(result, evaluated)
+		}
+	}
+
+	return result
+}
+
+// evalSliceExpression evaluates arr[start:end] slice expressions
+func evalSliceExpression(node *ast.SliceExpression, env *object.Environment) object.Object {
+	left := Eval(node.Left, env)
+	if isError(left) {
+		return left
+	}
+
+	var startIdx, endIdx int64
+
+	switch obj := left.(type) {
+	case *object.Array:
+		length := int64(len(obj.Elements))
+
+		// Evaluate start index
+		if node.Start != nil {
+			startVal := Eval(node.Start, env)
+			if isError(startVal) {
+				return startVal
+			}
+			if intVal, ok := startVal.(*object.Integer); ok {
+				startIdx = intVal.Value
+				if startIdx < 0 {
+					startIdx = length + startIdx // negative indexing
+				}
+			} else {
+				return newError("slice index must be an integer, got %s", startVal.Type())
+			}
+		} else {
+			startIdx = 0
+		}
+
+		// Evaluate end index
+		if node.End != nil {
+			endVal := Eval(node.End, env)
+			if isError(endVal) {
+				return endVal
+			}
+			if intVal, ok := endVal.(*object.Integer); ok {
+				endIdx = intVal.Value
+				if endIdx < 0 {
+					endIdx = length + endIdx // negative indexing
+				}
+			} else {
+				return newError("slice index must be an integer, got %s", endVal.Type())
+			}
+		} else {
+			endIdx = length
+		}
+
+		// Bounds checking
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if endIdx > length {
+			endIdx = length
+		}
+		if startIdx > endIdx {
+			return &object.Array{Elements: []object.Object{}}
+		}
+
+		// Create new slice
+		newElements := make([]object.Object, endIdx-startIdx)
+		copy(newElements, obj.Elements[startIdx:endIdx])
+		return &object.Array{Elements: newElements}
+
+	case *object.String:
+		length := int64(len(obj.Value))
+
+		// Evaluate start index
+		if node.Start != nil {
+			startVal := Eval(node.Start, env)
+			if isError(startVal) {
+				return startVal
+			}
+			if intVal, ok := startVal.(*object.Integer); ok {
+				startIdx = intVal.Value
+				if startIdx < 0 {
+					startIdx = length + startIdx
+				}
+			} else {
+				return newError("slice index must be an integer, got %s", startVal.Type())
+			}
+		} else {
+			startIdx = 0
+		}
+
+		// Evaluate end index
+		if node.End != nil {
+			endVal := Eval(node.End, env)
+			if isError(endVal) {
+				return endVal
+			}
+			if intVal, ok := endVal.(*object.Integer); ok {
+				endIdx = intVal.Value
+				if endIdx < 0 {
+					endIdx = length + endIdx
+				}
+			} else {
+				return newError("slice index must be an integer, got %s", endVal.Type())
+			}
+		} else {
+			endIdx = length
+		}
+
+		// Bounds checking
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if endIdx > length {
+			endIdx = length
+		}
+		if startIdx > endIdx {
+			return &object.String{Value: ""}
+		}
+
+		return &object.String{Value: obj.Value[startIdx:endIdx]}
+
+	default:
+		return newError("slice operator not supported for: %s", left.Type())
+	}
+}
+
 func applyFunction(fn object.Object, args []object.Object) object.Object {
 	if fn == nil {
 		return newError("not a function: nil")
@@ -710,6 +1272,12 @@ func applyFunction(fn object.Object, args []object.Object) object.Object {
 	case *object.Function:
 		extendedEnv := extendFunctionEnv(fn, args)
 		evaluated := Eval(fn.Body, extendedEnv)
+		return unwrapReturnValue(evaluated)
+
+	case *object.ArrowFunction:
+		extendedEnv := extendArrowFunctionEnv(fn, args)
+		evaluated := Eval(fn.Body, extendedEnv)
+		// Arrow functions implicitly return their body expression
 		return unwrapReturnValue(evaluated)
 
 	case *object.Builtin:
@@ -731,6 +1299,18 @@ func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Enviro
 	// But 'self' is not in parameters.
 	// We need to handle 'self' injection in applyFunction or before.
 	// See evalDotExpression.
+
+	return env
+}
+
+func extendArrowFunctionEnv(fn *object.ArrowFunction, args []object.Object) *object.Environment {
+	env := object.NewEnclosedEnvironment(fn.Env)
+
+	for i, param := range fn.Parameters {
+		if i < len(args) {
+			env.Set(param.Value, args[i])
+		}
+	}
 
 	return env
 }
@@ -899,6 +1479,11 @@ func evalPostfixExpression(node *ast.PostfixExpression, env *object.Environment)
 		return newError("postfix operator on non-identifier")
 	}
 
+	// Check if the variable is a constant
+	if env.IsConst(ident.Value) {
+		return newErrorWithLocation("cannot reassign constant variable: "+ident.Value, node.Token.Line, node.Token.Column, node.Token.EndColumn)
+	}
+
 	currentVal, ok := env.Get(ident.Value)
 	if !ok {
 		return newError("variable not defined: %s", ident.Value)
@@ -928,6 +1513,11 @@ func evalPrefixIncDec(node *ast.PrefixExpression, env *object.Environment) objec
 	ident, ok := node.Right.(*ast.Identifier)
 	if !ok {
 		return newError("prefix %s operator on non-identifier", node.Operator)
+	}
+
+	// Check if the variable is a constant
+	if env.IsConst(ident.Value) {
+		return newErrorWithLocation("cannot reassign constant variable: "+ident.Value, node.Token.Line, node.Token.Column, node.Token.EndColumn)
 	}
 
 	currentVal, ok := env.Get(ident.Value)
@@ -961,6 +1551,11 @@ func evalAssignmentExpression(node *ast.InfixExpression, env *object.Environment
 	ident, ok := node.Left.(*ast.Identifier)
 	if !ok {
 		return newError("assignment to non-identifier")
+	}
+
+	// Check if the variable is a constant
+	if env.IsConst(ident.Value) {
+		return newErrorWithLocation("cannot reassign constant variable: "+ident.Value, node.Token.Line, node.Token.Column, node.Token.EndColumn)
 	}
 
 	if node.Operator == "=" {
@@ -1742,6 +2337,28 @@ var builtins = map[string]*object.Builtin{
 	"reduce": nil, // initialized in init()
 }
 
+// isCallable checks if an object can be called as a function
+func isCallable(obj object.Object) bool {
+	switch obj.Type() {
+	case object.FUNCTION_OBJ, object.ARROW_FUNCTION_OBJ, object.BUILTIN_OBJ:
+		return true
+	default:
+		return false
+	}
+}
+
+// getParamCount returns the number of parameters for a callable
+func getParamCount(obj object.Object) int {
+	switch fn := obj.(type) {
+	case *object.Function:
+		return len(fn.Parameters)
+	case *object.ArrowFunction:
+		return len(fn.Parameters)
+	default:
+		return 0
+	}
+}
+
 func init() {
 	builtins["map"] = &object.Builtin{
 		Fn: func(args ...object.Object) object.Object {
@@ -1751,15 +2368,16 @@ func init() {
 			if args[0].Type() != object.ARRAY_OBJ {
 				return newError("argument 1 to `map` must be ARRAY, got %s", args[0].Type())
 			}
-			if args[1].Type() != object.FUNCTION_OBJ {
+			if !isCallable(args[1]) {
 				return newError("argument 2 to `map` must be FUNCTION, got %s", args[1].Type())
 			}
 			arr := args[0].(*object.Array)
-			fn := args[1].(*object.Function)
+			fn := args[1]
+			paramCount := getParamCount(fn)
 			elements := make([]object.Object, len(arr.Elements))
 			for i, e := range arr.Elements {
 				fnArgs := []object.Object{e}
-				if len(fn.Parameters) > 1 {
+				if paramCount > 1 {
 					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
 				}
 				result := applyFunction(fn, fnArgs)
@@ -1779,15 +2397,16 @@ func init() {
 			if args[0].Type() != object.ARRAY_OBJ {
 				return newError("argument 1 to `filter` must be ARRAY, got %s", args[0].Type())
 			}
-			if args[1].Type() != object.FUNCTION_OBJ {
+			if !isCallable(args[1]) {
 				return newError("argument 2 to `filter` must be FUNCTION, got %s", args[1].Type())
 			}
 			arr := args[0].(*object.Array)
-			fn := args[1].(*object.Function)
+			fn := args[1]
+			paramCount := getParamCount(fn)
 			elements := []object.Object{}
 			for i, e := range arr.Elements {
 				fnArgs := []object.Object{e}
-				if len(fn.Parameters) > 1 {
+				if paramCount > 1 {
 					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
 				}
 				result := applyFunction(fn, fnArgs)
@@ -1809,11 +2428,12 @@ func init() {
 			if args[0].Type() != object.ARRAY_OBJ {
 				return newError("argument 1 to `reduce` must be ARRAY, got %s", args[0].Type())
 			}
-			if args[1].Type() != object.FUNCTION_OBJ {
+			if !isCallable(args[1]) {
 				return newError("argument 2 to `reduce` must be FUNCTION, got %s", args[1].Type())
 			}
 			arr := args[0].(*object.Array)
-			fn := args[1].(*object.Function)
+			fn := args[1]
+			paramCount := getParamCount(fn)
 
 			var accumulator object.Object
 			startIdx := 0
@@ -1829,7 +2449,7 @@ func init() {
 
 			for i := startIdx; i < len(arr.Elements); i++ {
 				fnArgs := []object.Object{accumulator, arr.Elements[i]}
-				if len(fn.Parameters) > 2 {
+				if paramCount > 2 {
 					fnArgs = append(fnArgs, &object.Integer{Value: int64(i)})
 				}
 				result := applyFunction(fn, fnArgs)
@@ -2559,9 +3179,528 @@ func RegisterBuiltinModules() {
 					return &object.Float{Value: math.Pow(x, y)}
 				},
 			},
+			"floor": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					switch arg := args[0].(type) {
+					case *object.Integer:
+						return arg
+					case *object.Float:
+						return &object.Integer{Value: int64(math.Floor(arg.Value))}
+					default:
+						return newError("argument to `floor` must be INTEGER or FLOAT, got %s", args[0].Type())
+					}
+				},
+			},
+			"ceil": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					switch arg := args[0].(type) {
+					case *object.Integer:
+						return arg
+					case *object.Float:
+						return &object.Integer{Value: int64(math.Ceil(arg.Value))}
+					default:
+						return newError("argument to `ceil` must be INTEGER or FLOAT, got %s", args[0].Type())
+					}
+				},
+			},
+			"round": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					switch arg := args[0].(type) {
+					case *object.Integer:
+						return arg
+					case *object.Float:
+						return &object.Integer{Value: int64(math.Round(arg.Value))}
+					default:
+						return newError("argument to `round` must be INTEGER or FLOAT, got %s", args[0].Type())
+					}
+				},
+			},
+			"min": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 2 {
+						return newError("wrong number of arguments. got=%d, want=at least 2", len(args))
+					}
+					// Convert all to float for comparison
+					minVal := math.MaxFloat64
+					isAllIntegers := true
+					for _, arg := range args {
+						var val float64
+						switch a := arg.(type) {
+						case *object.Integer:
+							val = float64(a.Value)
+						case *object.Float:
+							val = a.Value
+							isAllIntegers = false
+						default:
+							return newError("arguments to `min` must be INTEGER or FLOAT, got %s", arg.Type())
+						}
+						if val < minVal {
+							minVal = val
+						}
+					}
+					if isAllIntegers {
+						return &object.Integer{Value: int64(minVal)}
+					}
+					return &object.Float{Value: minVal}
+				},
+			},
+			"max": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 2 {
+						return newError("wrong number of arguments. got=%d, want=at least 2", len(args))
+					}
+					// Convert all to float for comparison
+					maxVal := -math.MaxFloat64
+					isAllIntegers := true
+					for _, arg := range args {
+						var val float64
+						switch a := arg.(type) {
+						case *object.Integer:
+							val = float64(a.Value)
+						case *object.Float:
+							val = a.Value
+							isAllIntegers = false
+						default:
+							return newError("arguments to `max` must be INTEGER or FLOAT, got %s", arg.Type())
+						}
+						if val > maxVal {
+							maxVal = val
+						}
+					}
+					if isAllIntegers {
+						return &object.Integer{Value: int64(maxVal)}
+					}
+					return &object.Float{Value: maxVal}
+				},
+			},
+			"random": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) == 0 {
+						// Return random float between 0 and 1
+						return &object.Float{Value: rand.Float64()}
+					} else if len(args) == 1 {
+						// Return random int between 0 and n-1
+						if args[0].Type() != object.INTEGER_OBJ {
+							return newError("argument to `random` must be INTEGER, got %s", args[0].Type())
+						}
+						n := args[0].(*object.Integer).Value
+						if n <= 0 {
+							return newError("argument to `random` must be positive")
+						}
+						return &object.Integer{Value: rand.Int63n(n)}
+					} else if len(args) == 2 {
+						// Return random int between min and max (inclusive)
+						if args[0].Type() != object.INTEGER_OBJ || args[1].Type() != object.INTEGER_OBJ {
+							return newError("arguments to `random` must be INTEGER")
+						}
+						min := args[0].(*object.Integer).Value
+						max := args[1].(*object.Integer).Value
+						if max < min {
+							return newError("max must be >= min in random(min, max)")
+						}
+						return &object.Integer{Value: min + rand.Int63n(max-min+1)}
+					}
+					return newError("wrong number of arguments. got=%d, want=0, 1, or 2", len(args))
+				},
+			},
+			"e": &object.Float{Value: math.E},
+			"tan": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					val := getNumericValue(args[0])
+					if val == nil {
+						return newError("argument to `tan` must be FLOAT or INTEGER")
+					}
+					return &object.Float{Value: math.Tan(*val)}
+				},
+			},
+			"log": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					val := getNumericValue(args[0])
+					if val == nil {
+						return newError("argument to `log` must be FLOAT or INTEGER")
+					}
+					return &object.Float{Value: math.Log(*val)}
+				},
+			},
+			"log10": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					val := getNumericValue(args[0])
+					if val == nil {
+						return newError("argument to `log10` must be FLOAT or INTEGER")
+					}
+					return &object.Float{Value: math.Log10(*val)}
+				},
+			},
 		}
 		return createModule(mathMethods)
 	}
+
+	// JSON Module
+	moduleRegistry["json"] = func() *object.Hash {
+		jsonMethods := map[string]object.Object{
+			"parse": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `json.parse` must be STRING, got %s", args[0].Type())
+					}
+					jsonStr := args[0].(*object.String).Value
+					return parseJSON(jsonStr)
+				},
+			},
+			"stringify": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 1 || len(args) > 2 {
+						return newError("wrong number of arguments. got=%d, want=1 or 2", len(args))
+					}
+					indent := ""
+					if len(args) == 2 {
+						if args[1].Type() == object.INTEGER_OBJ {
+							spaces := args[1].(*object.Integer).Value
+							for i := int64(0); i < spaces; i++ {
+								indent += " "
+							}
+						} else if args[1].Type() == object.STRING_OBJ {
+							indent = args[1].(*object.String).Value
+						}
+					}
+					return stringifyJSON(args[0], indent)
+				},
+			},
+			"valid": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `json.valid` must be STRING, got %s", args[0].Type())
+					}
+					jsonStr := args[0].(*object.String).Value
+					var js interface{}
+					if err := json.Unmarshal([]byte(jsonStr), &js); err != nil {
+						return FALSE
+					}
+					return TRUE
+				},
+			},
+		}
+		return createModule(jsonMethods)
+	}
+
+	// Time Module
+	moduleRegistry["time"] = func() *object.Hash {
+		timeMethods := map[string]object.Object{
+			"now": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					return &object.Integer{Value: time.Now().Unix()}
+				},
+			},
+			"nowMs": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					return &object.Integer{Value: time.Now().UnixNano() / int64(time.Millisecond)}
+				},
+			},
+			"format": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 1 || len(args) > 2 {
+						return newError("wrong number of arguments. got=%d, want=1 or 2", len(args))
+					}
+					var t time.Time
+					if args[0].Type() == object.INTEGER_OBJ {
+						t = time.Unix(args[0].(*object.Integer).Value, 0)
+					} else {
+						return newError("first argument to `time.format` must be INTEGER (unix timestamp)")
+					}
+					layout := "2006-01-02 15:04:05"
+					if len(args) == 2 {
+						if args[1].Type() != object.STRING_OBJ {
+							return newError("second argument to `time.format` must be STRING (format)")
+						}
+						layout = convertTimeFormat(args[1].(*object.String).Value)
+					}
+					return &object.String{Value: t.Format(layout)}
+				},
+			},
+			"parse": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 1 || len(args) > 2 {
+						return newError("wrong number of arguments. got=%d, want=1 or 2", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ {
+						return newError("first argument to `time.parse` must be STRING")
+					}
+					dateStr := args[0].(*object.String).Value
+					layout := "2006-01-02 15:04:05"
+					if len(args) == 2 {
+						if args[1].Type() != object.STRING_OBJ {
+							return newError("second argument to `time.parse` must be STRING (format)")
+						}
+						layout = convertTimeFormat(args[1].(*object.String).Value)
+					}
+					t, err := time.Parse(layout, dateStr)
+					if err != nil {
+						return newError("failed to parse time: %s", err.Error())
+					}
+					return &object.Integer{Value: t.Unix()}
+				},
+			},
+			"year": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.year` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Year())}
+				},
+			},
+			"month": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.month` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Month())}
+				},
+			},
+			"day": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.day` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Day())}
+				},
+			},
+			"hour": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.hour` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Hour())}
+				},
+			},
+			"minute": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.minute` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Minute())}
+				},
+			},
+			"second": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.second` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Second())}
+				},
+			},
+			"weekday": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.weekday` must be INTEGER (unix timestamp)")
+					}
+					t := time.Unix(args[0].(*object.Integer).Value, 0)
+					return &object.Integer{Value: int64(t.Weekday())}
+				},
+			},
+			"sleep": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `time.sleep` must be INTEGER (milliseconds)")
+					}
+					ms := args[0].(*object.Integer).Value
+					time.Sleep(time.Duration(ms) * time.Millisecond)
+					return NULL
+				},
+			},
+			"date": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					// time.date() returns current date as "YYYY-MM-DD"
+					// time.date(timestamp) returns date of timestamp
+					var t time.Time
+					if len(args) == 0 {
+						t = time.Now()
+					} else if len(args) == 1 && args[0].Type() == object.INTEGER_OBJ {
+						t = time.Unix(args[0].(*object.Integer).Value, 0)
+					} else {
+						return newError("argument to `time.date` must be INTEGER (unix timestamp) or no arguments")
+					}
+					return &object.String{Value: t.Format("2006-01-02")}
+				},
+			},
+			"time": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					// time.time() returns current time as "HH:MM:SS"
+					// time.time(timestamp) returns time of timestamp
+					var t time.Time
+					if len(args) == 0 {
+						t = time.Now()
+					} else if len(args) == 1 && args[0].Type() == object.INTEGER_OBJ {
+						t = time.Unix(args[0].(*object.Integer).Value, 0)
+					} else {
+						return newError("argument to `time.time` must be INTEGER (unix timestamp) or no arguments")
+					}
+					return &object.String{Value: t.Format("15:04:05")}
+				},
+			},
+		}
+		return createModule(timeMethods)
+	}
+}
+
+// Helper function to get numeric value as float64 pointer
+func getNumericValue(obj object.Object) *float64 {
+	switch o := obj.(type) {
+	case *object.Integer:
+		val := float64(o.Value)
+		return &val
+	case *object.Float:
+		return &o.Value
+	default:
+		return nil
+	}
+}
+
+// parseJSON converts a JSON string to Victoria objects
+func parseJSON(jsonStr string) object.Object {
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return newError("failed to parse JSON: %s", err.Error())
+	}
+	return jsonToObject(data)
+}
+
+// jsonToObject converts a Go interface{} to Victoria object
+func jsonToObject(data interface{}) object.Object {
+	if data == nil {
+		return NULL
+	}
+	switch v := data.(type) {
+	case bool:
+		if v {
+			return TRUE
+		}
+		return FALSE
+	case float64:
+		// Check if it's actually an integer
+		if v == float64(int64(v)) {
+			return &object.Integer{Value: int64(v)}
+		}
+		return &object.Float{Value: v}
+	case string:
+		return &object.String{Value: v}
+	case []interface{}:
+		elements := make([]object.Object, len(v))
+		for i, elem := range v {
+			elements[i] = jsonToObject(elem)
+		}
+		return &object.Array{Elements: elements}
+	case map[string]interface{}:
+		pairs := make(map[object.HashKey]object.HashPair)
+		for key, val := range v {
+			keyObj := &object.String{Value: key}
+			valObj := jsonToObject(val)
+			pairs[keyObj.HashKey()] = object.HashPair{Key: keyObj, Value: valObj}
+		}
+		return &object.Hash{Pairs: pairs}
+	default:
+		return newError("unsupported JSON type: %T", v)
+	}
+}
+
+// stringifyJSON converts a Victoria object to JSON string
+func stringifyJSON(obj object.Object, indent string) object.Object {
+	goVal := objectToGo(obj)
+	var jsonBytes []byte
+	var err error
+	if indent != "" {
+		jsonBytes, err = json.MarshalIndent(goVal, "", indent)
+	} else {
+		jsonBytes, err = json.Marshal(goVal)
+	}
+	if err != nil {
+		return newError("failed to stringify JSON: %s", err.Error())
+	}
+	return &object.String{Value: string(jsonBytes)}
+}
+
+// objectToGo converts a Victoria object to Go interface{}
+func objectToGo(obj object.Object) interface{} {
+	switch o := obj.(type) {
+	case *object.Integer:
+		return o.Value
+	case *object.Float:
+		return o.Value
+	case *object.Boolean:
+		return o.Value
+	case *object.String:
+		return o.Value
+	case *object.Null:
+		return nil
+	case *object.Array:
+		result := make([]interface{}, len(o.Elements))
+		for i, elem := range o.Elements {
+			result[i] = objectToGo(elem)
+		}
+		return result
+	case *object.Hash:
+		result := make(map[string]interface{})
+		for _, pair := range o.Pairs {
+			key := pair.Key.Inspect()
+			result[key] = objectToGo(pair.Value)
+		}
+		return result
+	default:
+		return obj.Inspect()
+	}
+}
+
+// convertTimeFormat converts common format tokens to Go's time format
+func convertTimeFormat(format string) string {
+	// Common format tokens: YYYY, MM, DD, HH, mm, ss, etc.
+	replacements := map[string]string{
+		"YYYY": "2006",
+		"YY":   "06",
+		"MM":   "01",
+		"DD":   "02",
+		"HH":   "15",
+		"hh":   "03",
+		"mm":   "04",
+		"ss":   "05",
+		"SSS":  "000",
+		"Z":    "-0700",
+		"A":    "PM",
+		"a":    "pm",
+	}
+	result := format
+	for token, goFormat := range replacements {
+		result = strings.Replace(result, token, goFormat, -1)
+	}
+	return result
 }
 
 func evalIncludeStatement(node *ast.IncludeStatement, env *object.Environment) object.Object {

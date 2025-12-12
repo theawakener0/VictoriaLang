@@ -61,6 +61,27 @@ func (ls *LetStatement) String() string {
 	return out.String()
 }
 
+// ConstStatement - immutable variable declaration
+type ConstStatement struct {
+	Token token.Token // the token.CONST token
+	Name  *Identifier
+	Value Expression
+}
+
+func (cs *ConstStatement) statementNode()       {}
+func (cs *ConstStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ConstStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("const ")
+	out.WriteString(cs.Name.String())
+	out.WriteString(" = ")
+	if cs.Value != nil {
+		out.WriteString(cs.Value.String())
+	}
+	out.WriteString(";")
+	return out.String()
+}
+
 // ReturnStatement
 type ReturnStatement struct {
 	Token       token.Token // the 'return' token
@@ -358,6 +379,47 @@ func (ie *IndexExpression) String() string {
 	return out.String()
 }
 
+// SliceExpression - arr[start:end] for array slicing
+type SliceExpression struct {
+	Token token.Token // The [ token
+	Left  Expression  // The array/string being sliced
+	Start Expression  // Start index (can be nil for [:end])
+	End   Expression  // End index (can be nil for [start:])
+}
+
+func (se *SliceExpression) expressionNode()      {}
+func (se *SliceExpression) TokenLiteral() string { return se.Token.Literal }
+func (se *SliceExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(")
+	out.WriteString(se.Left.String())
+	out.WriteString("[")
+	if se.Start != nil {
+		out.WriteString(se.Start.String())
+	}
+	out.WriteString(":")
+	if se.End != nil {
+		out.WriteString(se.End.String())
+	}
+	out.WriteString("])")
+	return out.String()
+}
+
+// SpreadExpression - ...arr for spreading array elements
+type SpreadExpression struct {
+	Token token.Token // The ... token
+	Right Expression  // The expression being spread
+}
+
+func (se *SpreadExpression) expressionNode()      {}
+func (se *SpreadExpression) TokenLiteral() string { return se.Token.Literal }
+func (se *SpreadExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("...")
+	out.WriteString(se.Right.String())
+	return out.String()
+}
+
 // HashLiteral
 type HashLiteral struct {
 	Token token.Token // the '{' token
@@ -648,5 +710,32 @@ func (fe *ForInIndexExpression) String() string {
 	out.WriteString(fe.Iterable.String())
 	out.WriteString(" ")
 	out.WriteString(fe.Body.String())
+	return out.String()
+}
+
+// ArrowFunction - Lambda shorthand: x => x * 2 or (x, y) => x + y
+type ArrowFunction struct {
+	Token      token.Token // The => token
+	Parameters []*Identifier
+	Body       Expression // Single expression (not block)
+}
+
+func (af *ArrowFunction) expressionNode()      {}
+func (af *ArrowFunction) TokenLiteral() string { return af.Token.Literal }
+func (af *ArrowFunction) String() string {
+	var out bytes.Buffer
+	params := []string{}
+	for _, p := range af.Parameters {
+		params = append(params, p.String())
+	}
+	if len(af.Parameters) == 1 {
+		out.WriteString(af.Parameters[0].String())
+	} else {
+		out.WriteString("(")
+		out.WriteString(strings.Join(params, ", "))
+		out.WriteString(")")
+	}
+	out.WriteString(" => ")
+	out.WriteString(af.Body.String())
 	return out.String()
 }

@@ -1,0 +1,79 @@
+// Demonstration of new Victoria language features
+
+// ============================================
+// Feature 1: Const/Immutable Variables
+// ============================================
+print("=== Const Variables ===")
+
+const PI = 3.14159
+const MAX_SIZE = 100
+const APP_NAME = "Victoria Lang"
+
+print("PI = ${PI}")
+print("MAX_SIZE = ${MAX_SIZE}")
+print("APP_NAME = ${APP_NAME}")
+
+// Attempting to reassign a const would cause an error:
+// PI = 3.0  // ERROR: cannot reassign constant variable: PI
+
+// ============================================
+// Feature 2: Array Slicing
+// ============================================
+print("\n=== Array Slicing ===")
+
+let arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+print("Original array: ${arr}")
+
+// Get elements from index 2 to 5 (exclusive)
+let slice1 = arr[2:5]
+print("arr[2:5] = ${slice1}")  // [3, 4, 5]
+
+// Get elements from start to index 3
+let slice2 = arr[:3]
+print("arr[:3] = ${slice2}")   // [1, 2, 3]
+
+// Get elements from index 5 to end
+let slice3 = arr[5:]
+print("arr[5:] = ${slice3}")   // [6, 7, 8, 9, 10]
+
+// Get last 3 elements using negative indexing
+let slice4 = arr[-3:]
+print("arr[-3:] = ${slice4}")  // [8, 9, 10]
+
+// String slicing also works!
+let str = "Hello, World!"
+print("\nString: ${str}")
+print("str[0:5] = ${str[0:5]}")   // "Hello"
+print("str[7:] = ${str[7:]}")     // "World!"
+print("str[:5] = ${str[:5]}")     // "Hello"
+
+// ============================================
+// Feature 3: Spread Operator
+// ============================================
+print("\n=== Spread Operator ===")
+
+let arr1 = [1, 2, 3]
+let arr2 = [4, 5, 6]
+
+// Merge arrays using spread
+let merged = [...arr1, ...arr2]
+print("arr1 = ${arr1}")
+print("arr2 = ${arr2}")
+print("[...arr1, ...arr2] = ${merged}")  // [1, 2, 3, 4, 5, 6]
+
+// Add elements around spread
+let extended = [0, ...arr1, 99, ...arr2, 100]
+print("[0, ...arr1, 99, ...arr2, 100] = ${extended}")  // [0, 1, 2, 3, 99, 4, 5, 6, 100]
+
+// Copy an array
+let original = [10, 20, 30]
+let copy = [...original]
+print("original = ${original}")
+print("copy = [...original] = ${copy}")
+
+// Spread works with slicing too!
+let part = arr[0:3]
+let combined = [...part, ...arr[7:]]
+print("[...arr[0:3], ...arr[7:]] = ${combined}")  // [1, 2, 3, 8, 9, 10]
+
+print("\n=== All features working! ===")

@@ -44,6 +44,11 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = token.Token{Type: token.EQ, Literal: literal, Line: l.line, Column: startCol, EndColumn: l.column + 1}
+		} else if l.peekChar() == '>' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.ARROW, Literal: literal, Line: l.line, Column: startCol, EndColumn: l.column + 1}
 		} else {
 			tok = newTokenWithCol(token.ASSIGN, l.ch, l.line, startCol)
 		}
@@ -162,8 +167,13 @@ func (l *Lexer) NextToken() token.Token {
 	case ',':
 		tok = newTokenWithCol(token.COMMA, l.ch, l.line, startCol)
 	case '.':
-		// Check if it's a range operator ..
-		if l.peekChar() == '.' {
+		// Check if it's a spread operator ...
+		if l.peekChar() == '.' && l.peekCharN(2) == '.' {
+			l.readChar() // consume second .
+			l.readChar() // consume third .
+			tok = token.Token{Type: token.SPREAD, Literal: "...", Line: l.line, Column: startCol, EndColumn: l.column + 1}
+		} else if l.peekChar() == '.' {
+			// Check if it's a range operator ..
 			ch := l.ch
 			l.readChar()
 			literal := string(ch) + string(l.ch)
@@ -341,6 +351,15 @@ func (l *Lexer) peekChar() byte {
 		return 0
 	}
 	return l.input[l.readPosition]
+}
+
+// peekCharN peeks n characters ahead (1 = next char, 2 = char after next, etc.)
+func (l *Lexer) peekCharN(n int) byte {
+	pos := l.readPosition + n - 1
+	if pos >= len(l.input) {
+		return 0
+	}
+	return l.input[pos]
 }
 
 func newToken(tokenType token.TokenType, ch byte, line int) token.Token {

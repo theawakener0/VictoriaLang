@@ -53,6 +53,7 @@ const (
 
 	QUESTION = "?"
 	RANGE    = ".."
+	ARROW    = "=>"
 
 	// Delimiters
 	COMMA     = ","
@@ -87,6 +88,10 @@ const (
 	SWITCH   = "SWITCH"
 	CASE     = "CASE"
 	DEFAULT  = "DEFAULT"
+	CONST    = "CONST"
+
+	// Special operators
+	SPREAD = "..."
 )
 
 var keywords = map[string]TokenType{
@@ -112,6 +117,7 @@ var keywords = map[string]TokenType{
 	"switch":   SWITCH,
 	"case":     CASE,
 	"default":  DEFAULT,
+	"const":    CONST,
 }
 
 func LookupIdent(ident string) TokenType {

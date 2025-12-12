@@ -1,0 +1,148 @@
+// ===========================================
+// Victoria Language - New Features Showcase
+// ===========================================
+
+include (
+    "math",
+    "json",
+    "time"
+)
+
+print("=== Lambda Shorthand (Arrow Functions) ===")
+
+// Simple lambda: x => x * 2
+let double = x => x * 2
+print("double(5) = " + string(double(5)))
+
+// Lambda with expression
+let square = x => x * x
+print("square(4) = " + string(square(4)))
+
+// Using lambdas with map
+let numbers = [1, 2, 3, 4, 5]
+let doubled = map(numbers, x => x * 2)
+print("map([1,2,3,4,5], x => x * 2) = " + string(doubled))
+
+// Using lambdas with filter
+let evens = filter(numbers, x => x % 2 == 0)
+print("filter([1,2,3,4,5], x => x % 2 == 0) = " + string(evens))
+
+// Multi-parameter lambda: (x, y) => x + y
+let add = (x, y) => x + y
+print("add(3, 4) = " + string(add(3, 4)))
+
+// No-parameter lambda: () => 42
+let getAnswer = () => 42
+print("getAnswer() = " + string(getAnswer()))
+
+print("")
+print("=== Extended Math Functions ===")
+
+// floor, ceil, round
+let pi = 3.14159
+print("math.floor(3.7) = " + string(math.floor(3.7)))
+print("math.ceil(3.2) = " + string(math.ceil(3.2)))
+print("math.round(3.5) = " + string(math.round(3.5)))
+print("math.round(3.4) = " + string(math.round(3.4)))
+
+// min, max
+print("math.min(5, 3, 8, 1) = " + string(math.min(5, 3, 8, 1)))
+print("math.max(5, 3, 8, 1) = " + string(math.max(5, 3, 8, 1)))
+
+// random
+print("math.random() = " + string(math.random()))  // Float between 0 and 1
+print("math.random(10) = " + string(math.random(10)))  // Integer 0-9
+print("math.random(1, 6) = " + string(math.random(1, 6)))  // Integer 1-6 (dice roll)
+
+// Additional math functions
+print("math.e = " + string(math.e))
+print("math.tan(0) = " + string(math.tan(0)))
+print("math.log(2.718281828) = " + string(math.log(2.718281828)))
+print("math.log10(100) = " + string(math.log10(100)))
+
+print("")
+print("=== JSON Module ===")
+
+// Parse JSON string to Victoria object
+let jsonStr = `{"name": "Victoria", "version": 1.0, "features": ["lambdas", "modules"]}`
+let obj = json.parse(jsonStr)
+print("Parsed JSON:")
+print("  name: " + obj["name"])
+print("  version: " + string(obj["version"]))
+print("  features: " + string(obj["features"]))
+
+// Stringify Victoria object to JSON
+let data = {
+    "language": "Victoria",
+    "year": 2024,
+    "active": true,
+    "modules": ["math", "json", "time"]
+}
+print("Stringified JSON:")
+print(json.stringify(data))
+
+// Pretty print with indent
+print("Pretty JSON (2 spaces):")
+print(json.stringify(data, 2))
+
+// Validate JSON
+print("json.valid('{\"valid\": true}') = " + string(json.valid(`{"valid": true}`)))
+print("json.valid('invalid json') = " + string(json.valid("invalid json")))
+
+print("")
+print("=== Time/Date Module ===")
+
+// Get current timestamp
+let now = time.now()
+print("time.now() = " + string(now))
+print("time.nowMs() = " + string(time.nowMs()))
+
+// Format timestamp
+print("time.format(now) = " + time.format(now))
+print("time.format(now, 'YYYY-MM-DD') = " + time.format(now, "YYYY-MM-DD"))
+print("time.format(now, 'HH:mm:ss') = " + time.format(now, "HH:mm:ss"))
+
+// Get date/time components
+print("time.date() = " + time.date())
+print("time.time() = " + time.time())
+print("time.year(now) = " + string(time.year(now)))
+print("time.month(now) = " + string(time.month(now)))
+print("time.day(now) = " + string(time.day(now)))
+print("time.hour(now) = " + string(time.hour(now)))
+print("time.minute(now) = " + string(time.minute(now)))
+print("time.second(now) = " + string(time.second(now)))
+print("time.weekday(now) = " + string(time.weekday(now)))  // 0=Sunday, 6=Saturday
+
+// Parse time string
+let parsed = time.parse("2024-12-25 10:30:00")
+print("time.parse('2024-12-25 10:30:00') = " + string(parsed))
+print("Formatted back: " + time.format(parsed))
+
+print("")
+print("=== Combined Example: Using All Features ===")
+
+// Create a data processing pipeline using lambdas
+let scores = [85, 92, 78, 95, 88, 76, 91]
+
+// Filter passing scores (>= 80) using lambda
+let passing = filter(scores, score => score >= 80)
+print("Passing scores: " + string(passing))
+
+// Calculate statistics
+print("Min score: " + string(math.min(85, 92, 78, 95, 88, 76, 91)))
+print("Max score: " + string(math.max(85, 92, 78, 95, 88, 76, 91)))
+
+// Create a report object
+let report = {
+    "timestamp": time.now(),
+    "date": time.date(),
+    "total_students": len(scores),
+    "passing_count": len(passing),
+    "pass_rate": math.round(len(passing) * 100 / len(scores))
+}
+
+print("Report as JSON:")
+print(json.stringify(report, 2))
+
+print("")
+print("=== All features working! ===")

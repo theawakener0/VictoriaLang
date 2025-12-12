@@ -1,0 +1,20 @@
+// Test string slicing
+let str = "Hello, World!"
+print("str = Hello, World!")
+
+let h = str[0:5]
+print("str[0:5] = ")
+print(h)
+
+let w = str[7:]
+print("str[7:] = ")
+print(w)
+
+let greeting = str[:5]
+print("str[:5] = ")
+print(greeting)
+
+// Negative indexing on strings
+let last = str[-1:]
+print("str[-1:] = ")
+print(last)

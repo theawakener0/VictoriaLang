@@ -12,6 +12,7 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	ARROW_PREC  // =>
 	TERNARY     // ?:
 	OR_PREC     // || or
 	AND_PREC    // && and
@@ -29,6 +30,7 @@ const (
 )
 
 var precedences = map[token.TokenType]int{
+	token.ARROW:           ARROW_PREC,
 	token.EQ:              EQUALS,
 	token.NOT_EQ:          EQUALS,
 	token.LT:              LESSGREATER,
@@ -105,6 +107,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.SWITCH, p.parseSwitchExpression)
 	p.registerPrefix(token.INC, p.parsePrefixIncDec)
 	p.registerPrefix(token.DEC, p.parsePrefixIncDec)
+	p.registerPrefix(token.SPREAD, p.parseSpreadExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -135,6 +138,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.OR_OR, p.parseInfixExpression)
 	p.registerInfix(token.QUESTION, p.parseTernaryExpression)
 	p.registerInfix(token.RANGE, p.parseRangeExpression)
+	p.registerInfix(token.ARROW, p.parseArrowFunction)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -248,6 +252,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.LET:
 		return p.parseLetStatement()
+	case token.CONST:
+		return p.parseConstStatement()
 	case token.RETURN:
 		return p.parseReturnStatement()
 	case token.INCLUDE:
@@ -280,6 +286,30 @@ func (p *Parser) parseStatement() ast.Statement {
 
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.curToken}
+
+	if !p.expectPeek(token.IDENT) {
+		return nil
+	}
+
+	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	if !p.expectPeek(token.ASSIGN) {
+		return nil
+	}
+
+	p.nextToken()
+
+	stmt.Value = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseConstStatement() *ast.ConstStatement {
+	stmt := &ast.ConstStatement{Token: p.curToken}
 
 	if !p.expectPeek(token.IDENT) {
 		return nil
@@ -685,14 +715,102 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 }
 
 func (p *Parser) parseGroupedExpression() ast.Expression {
+	startToken := p.curToken
 	p.nextToken()
 
+	// Check if this might be a lambda parameter list: (x) => or (x, y) =>
+	// First, check if it's just an identifier followed by ) and =>
+	if p.curTokenIs(token.IDENT) {
+		firstIdent := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+		if p.peekTokenIs(token.RPAREN) {
+			// Single parameter: (x) => expr
+			p.nextToken() // consume )
+			if p.peekTokenIs(token.ARROW) {
+				p.nextToken() // consume =>
+				arrowToken := p.curToken
+				p.nextToken() // move to body
+				body := p.parseExpression(ARROW_PREC)
+				return &ast.ArrowFunction{
+					Token:      arrowToken,
+					Parameters: []*ast.Identifier{firstIdent},
+					Body:       body,
+				}
+			}
+			// Not a lambda, just (x), return the identifier
+			return firstIdent
+		} else if p.peekTokenIs(token.COMMA) {
+			// Multi-parameter: (x, y, ...) => expr
+			params := []*ast.Identifier{firstIdent}
+			for p.peekTokenIs(token.COMMA) {
+				p.nextToken() // consume comma
+				p.nextToken() // move to next ident
+				if !p.curTokenIs(token.IDENT) {
+					// Not a valid parameter list, need to backtrack...
+					// This is complex - for simplicity, we assume it's a lambda
+					return nil
+				}
+				params = append(params, &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal})
+			}
+			if !p.expectPeek(token.RPAREN) {
+				return nil
+			}
+			if p.peekTokenIs(token.ARROW) {
+				p.nextToken() // consume =>
+				arrowToken := p.curToken
+				p.nextToken() // move to body
+				body := p.parseExpression(ARROW_PREC)
+				return &ast.ArrowFunction{
+					Token:      arrowToken,
+					Parameters: params,
+					Body:       body,
+				}
+			}
+			// Not a lambda, this is an error - can't have (x, y) without =>
+			return nil
+		}
+	}
+
+	// Check for empty parameter list: () => expr
+	if p.curTokenIs(token.RPAREN) {
+		if p.peekTokenIs(token.ARROW) {
+			p.nextToken() // consume =>
+			arrowToken := p.curToken
+			p.nextToken() // move to body
+			body := p.parseExpression(ARROW_PREC)
+			return &ast.ArrowFunction{
+				Token:      arrowToken,
+				Parameters: []*ast.Identifier{},
+				Body:       body,
+			}
+		}
+		// Empty parens without arrow - likely an error
+		return nil
+	}
+
+	// Regular grouped expression
 	exp := p.parseExpression(LOWEST)
 
 	if !p.expectPeek(token.RPAREN) {
 		return nil
 	}
 
+	// Check if followed by => (for non-identifier expressions wrapped in parens)
+	if p.peekTokenIs(token.ARROW) {
+		if ident, ok := exp.(*ast.Identifier); ok {
+			p.nextToken() // consume =>
+			arrowToken := p.curToken
+			p.nextToken() // move to body
+			body := p.parseExpression(ARROW_PREC)
+			return &ast.ArrowFunction{
+				Token:      arrowToken,
+				Parameters: []*ast.Identifier{ident},
+				Body:       body,
+			}
+		}
+	}
+
+	_ = startToken // suppress unused warning
 	return exp
 }
 
@@ -838,21 +956,91 @@ func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
 
 func (p *Parser) parseArrayLiteral() ast.Expression {
 	array := &ast.ArrayLiteral{Token: p.curToken}
-	array.Elements = p.parseExpressionList(token.RBRACKET)
+	array.Elements = p.parseArrayElements()
 	return array
 }
 
-func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
-	exp := &ast.IndexExpression{Token: p.curToken, Left: left}
+// parseArrayElements parses array elements including spread expressions
+func (p *Parser) parseArrayElements() []ast.Expression {
+	list := []ast.Expression{}
+
+	if p.peekTokenIs(token.RBRACKET) {
+		p.nextToken()
+		return list
+	}
 
 	p.nextToken()
-	exp.Index = p.parseExpression(LOWEST)
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+
+	return list
+}
+
+func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
+	bracketToken := p.curToken
+
+	p.nextToken()
+
+	// Check for slice expression: arr[start:end], arr[:end], arr[start:]
+	// If current token is COLON, it's [:end]
+	if p.curTokenIs(token.COLON) {
+		// [:end] case
+		sliceExp := &ast.SliceExpression{Token: bracketToken, Left: left, Start: nil}
+		p.nextToken()
+		if !p.curTokenIs(token.RBRACKET) {
+			sliceExp.End = p.parseExpression(LOWEST)
+			if !p.expectPeek(token.RBRACKET) {
+				return nil
+			}
+		}
+		return sliceExp
+	}
+
+	// Parse the first expression
+	firstExpr := p.parseExpression(LOWEST)
+
+	// Check if next token is COLON (slice) or RBRACKET (index)
+	if p.peekTokenIs(token.COLON) {
+		// Slice expression: arr[start:end] or arr[start:]
+		sliceExp := &ast.SliceExpression{Token: bracketToken, Left: left, Start: firstExpr}
+		p.nextToken() // consume COLON
+		p.nextToken() // move to end expression or RBRACKET
+
+		if !p.curTokenIs(token.RBRACKET) {
+			sliceExp.End = p.parseExpression(LOWEST)
+			if !p.expectPeek(token.RBRACKET) {
+				return nil
+			}
+		}
+		return sliceExp
+	}
+
+	// Regular index expression
+	exp := &ast.IndexExpression{Token: bracketToken, Left: left, Index: firstExpr}
 
 	if !p.expectPeek(token.RBRACKET) {
 		return nil
 	}
 
 	return exp
+}
+
+// parseSpreadExpression parses ...expression
+func (p *Parser) parseSpreadExpression() ast.Expression {
+	spreadToken := p.curToken
+	p.nextToken()
+
+	right := p.parseExpression(PREFIX)
+	return &ast.SpreadExpression{Token: spreadToken, Right: right}
 }
 
 func (p *Parser) parseHashLiteral() ast.Expression {
@@ -1227,4 +1415,38 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 
 	richErr := errors.ParseError(fmt.Sprintf("unexpected token '%s'", t), loc, p.sourceCode).WithHelp(help)
 	p.richErrors = append(p.richErrors, richErr)
+}
+
+// parseArrowFunction parses lambda shorthand: x => x * 2 or (x, y) => x + y
+func (p *Parser) parseArrowFunction(left ast.Expression) ast.Expression {
+	arrowToken := p.curToken
+	var params []*ast.Identifier
+
+	// The left side could be:
+	// 1. A single identifier: x => x * 2
+	// 2. A grouped expression containing identifiers: (x, y) => x + y (but this comes as identifier since we parse grouped expr)
+	switch l := left.(type) {
+	case *ast.Identifier:
+		params = []*ast.Identifier{l}
+	case *ast.InfixExpression:
+		// Handle case like (x, y) which becomes an infix expression with comma...
+		// But we don't have comma as operator. Need another approach.
+		// Actually, the grouped expression (x, y) won't work as expected since we don't parse comma-separated identifiers.
+		// For now, single identifier is most common use case.
+		return nil
+	default:
+		msg := fmt.Sprintf("expected identifier before '=>', got %T", left)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	p.nextToken() // consume =>
+
+	body := p.parseExpression(ARROW_PREC)
+
+	return &ast.ArrowFunction{
+		Token:      arrowToken,
+		Parameters: params,
+		Body:       body,
+	}
 }
