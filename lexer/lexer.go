@@ -362,9 +362,9 @@ func (l *Lexer) peekCharN(n int) byte {
 	return l.input[pos]
 }
 
-func newToken(tokenType token.TokenType, ch byte, line int) token.Token {
-	return token.Token{Type: tokenType, Literal: string(ch), Line: line, Column: 1, EndColumn: 2}
-}
+// func newToken(tokenType token.TokenType, ch byte, line int) token.Token {
+//	return token.Token{Type: tokenType, Literal: string(ch), Line: line, Column: 1, EndColumn: 2}
+//}
 
 func newTokenWithCol(tokenType token.TokenType, ch byte, line int, col int) token.Token {
 	return token.Token{Type: tokenType, Literal: string(ch), Line: line, Column: col, EndColumn: col + 1}

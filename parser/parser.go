@@ -269,13 +269,6 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.FUNCTION:
 		// Check if it is a method definition: def Struct.Method()
 		if p.peekTokenIs(token.IDENT) {
-			// It could be a function literal in an expression, but here we are at statement level.
-			// However, standard function def is `def name()`.
-			// Method def is `def Struct.name()`.
-			// Let's peek further.
-			// We can't easily peek 2 tokens ahead with this lexer setup without modifying it or consuming.
-			// But `def` at statement level usually means function declaration or method declaration.
-			// Let's handle it.
 			return p.parseFunctionOrMethodDeclaration()
 		}
 		return nil // Should not happen if syntax is correct
@@ -490,31 +483,27 @@ func (p *Parser) parseFunctionOrMethodDeclaration() ast.Statement {
 		return methodDef
 
 	} else {
-		// Function definition: define greet()
-		// This is actually a LetStatement in disguise: let greet = fn() { ... }
-		// But we want to support `define greet() {}` as top level.
-		// We can treat it as a LetStatement where value is FunctionLiteral.
 
-		fnLit := &ast.FunctionLiteral{Token: defToken}
-		fnLit.Name = firstIdent.Value
+		defineLit := &ast.FunctionLiteral{Token: defToken}
+		defineLit.Name = firstIdent.Value
 
 		if !p.expectPeek(token.LPAREN) {
 			return nil
 		}
 
-		fnLit.Parameters = p.parseFunctionParameters()
+		defineLit.Parameters = p.parseFunctionParameters()
 
 		if !p.expectPeek(token.LBRACE) {
 			return nil
 		}
 
-		fnLit.Body = p.parseBlockStatement()
+		defineLit.Body = p.parseBlockStatement()
 
 		// Wrap in LetStatement
 		letStmt := &ast.LetStatement{
 			Token: token.Token{Type: token.LET, Literal: "let", Line: defToken.Line},
 			Name:  firstIdent,
-			Value: fnLit,
+			Value: defineLit,
 		}
 		return letStmt
 	}
@@ -536,10 +525,6 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
 		// Special case: Struct instantiation looks like IDENT { ... }
-		// But IDENT is handled by parseIdentifier.
-		// We need to check if we are parsing a struct instantiation inside parseIdentifier?
-		// Or maybe parseIdentifier should look ahead?
-		// Let's handle it in parseIdentifier.
 		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
@@ -576,11 +561,6 @@ func (p *Parser) curPrecedence() int {
 func (p *Parser) parseIdentifier() ast.Expression {
 	// Check for Struct Instantiation: Student { ... }
 	if p.peekTokenIs(token.LBRACE) {
-		// This is ambiguous with function call returning a function that takes a block? No.
-		// Ambiguous with `x { ... }` which isn't valid unless x is a struct type.
-		// But wait, `if` `for` etc are keywords.
-		// If we have `ident {`, it's likely a struct instantiation or a hash literal if ident was missing (but here we have ident).
-		// Let's assume it is struct instantiation.
 		return p.parseStructInstantiation()
 	}
 	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
@@ -595,7 +575,6 @@ func (p *Parser) parseStructInstantiation() ast.Expression {
 	si.Fields = make(map[string]ast.Expression)
 
 	// parse { key: value, ... }
-	// This is similar to hash literal but keys are identifiers (fields)
 
 	if !p.curTokenIs(token.LBRACE) {
 		return nil
@@ -1183,21 +1162,9 @@ func (p *Parser) parseCForExpression() ast.Expression {
 
 	// Init
 	p.nextToken()
-	// We expect a statement here, usually a LetStatement or ExpressionStatement (assignment)
-	// But parseStatement expects to be at the start of a statement.
-	// Let's reuse parseStatement but we need to be careful about semicolons.
-	// parseStatement consumes the semicolon if present.
-
-	// Actually, C-style for loop parts are statements.
-	// for (let i = 0; i < 10; i = i + 1)
 
 	// Init
 	expr.Init = p.parseStatement()
-	// parseStatement consumes the semicolon if it's a LetStatement or ExpressionStatement
-	// If it didn't consume semicolon (e.g. if we didn't put one), we might need to check.
-	// But our parseLetStatement consumes semicolon if present.
-	// If it's missing, we might be fine or not.
-	// Let's assume standard C-style: for (init; cond; update)
 
 	p.nextToken()
 	expr.Condition = p.parseExpression(LOWEST)
@@ -1207,35 +1174,8 @@ func (p *Parser) parseCForExpression() ast.Expression {
 	}
 
 	p.nextToken()
-	// Update is usually an assignment or expression
-	// It shouldn't have a semicolon at the end inside the loop header usually?
-	// for (...; ...; i++)
-	// We can parse it as a statement but ensure we don't consume the closing paren as part of it?
-	// Actually, `i++` isn't a statement in our language yet (no ++ operator). `i = i + 1` is an assignment.
-	// Assignment is an expression in some languages, statement in others.
-	// In our AST, we don't have AssignmentExpression, we have LetStatement.
-	// But we can have `i = i + 1` as an expression if we support assignment expressions.
-	// The prompt says `Assignment: =` under Operators. So `x = 10` is likely an expression or statement.
-	// If `x = 10` is an expression, then `i = i + 1` is an expression.
-	// Let's assume assignment is an infix expression for now?
-	// Wait, `let x = 10` is a statement.
-	// Re-assigning `x = 11` is usually an expression or statement.
-	// If I didn't implement AssignmentExpression, I should.
-	// I implemented LetStatement.
-	// I need to handle reassignment. `x = 5`.
-	// This is usually parsed as an infix expression where left side is identifier.
-	// Let's add support for `=` as infix operator in `parseInfixExpression`.
-	// I already registered `=` as infix.
 
 	expr.Update = p.parseStatement()
-	// Note: parseStatement might consume the closing ) if we are not careful, but usually it stops at semicolon.
-	// But the update clause doesn't have a semicolon.
-	// So parseStatement might fail or consume too much.
-	// Let's just parse expression for update.
-	// But wait, `i = i + 1` is an expression? Yes if `=` is infix.
-	// So let's change `Update` to Expression.
-	// But `ast.CForExpression` has `Update Statement`. Let's change it to Expression or handle it.
-	// Actually, let's just parse expression for update.
 
 	if !p.expectPeek(token.RPAREN) {
 		return nil
@@ -1422,17 +1362,10 @@ func (p *Parser) parseArrowFunction(left ast.Expression) ast.Expression {
 	arrowToken := p.curToken
 	var params []*ast.Identifier
 
-	// The left side could be:
-	// 1. A single identifier: x => x * 2
-	// 2. A grouped expression containing identifiers: (x, y) => x + y (but this comes as identifier since we parse grouped expr)
 	switch l := left.(type) {
 	case *ast.Identifier:
 		params = []*ast.Identifier{l}
 	case *ast.InfixExpression:
-		// Handle case like (x, y) which becomes an infix expression with comma...
-		// But we don't have comma as operator. Need another approach.
-		// Actually, the grouped expression (x, y) won't work as expected since we don't parse comma-separated identifiers.
-		// For now, single identifier is most common use case.
 		return nil
 	default:
 		msg := fmt.Sprintf("expected identifier before '=>', got %T", left)

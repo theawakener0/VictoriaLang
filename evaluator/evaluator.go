@@ -122,11 +122,6 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalPostfixExpression(node, env)
 
 	case *ast.InfixExpression:
-		// Special handling for assignment if we treat it as infix
-		// But we don't have assignment expression in AST yet, only LetStatement.
-		// Wait, I said I would handle reassignment `x = 5`.
-		// In parser, I didn't implement `parseAssignmentExpression` specifically, but `parseInfixExpression` handles `=`.
-		// So `x = 5` becomes `InfixExpression(x, =, 5)`.
 		if node.Operator == "=" || node.Operator == "+=" || node.Operator == "-=" || node.Operator == "*=" || node.Operator == "/=" || node.Operator == "%=" {
 			return evalAssignmentExpression(node, env)
 		}
@@ -274,7 +269,6 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	case *ast.MethodDefinition:
 		// Register method in env as "StructName.MethodName"
-		// We store it as a Function object
 		fn := &object.Function{Parameters: node.Parameters, Env: env, Body: node.Body}
 		key := node.StructName.Value + "." + node.MethodName.Value
 		env.Set(key, fn)
@@ -1294,12 +1288,6 @@ func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Enviro
 	for i, param := range fn.Parameters {
 		env.Set(param.Value, args[i])
 	}
-
-	// If it's a method call, we might need to inject 'self'.
-	// But 'self' is not in parameters.
-	// We need to handle 'self' injection in applyFunction or before.
-	// See evalDotExpression.
-
 	return env
 }
 
@@ -1447,24 +1435,12 @@ func evalDotExpression(node *ast.InfixExpression, env *object.Environment) objec
 		// Check methods
 		methodName := instance.Struct.Name + "." + ident.Value
 		if method, ok := env.Get(methodName); ok {
-			// It's a function. We need to bind 'self'.
-			// We can return a bound function or just the function and let applyFunction handle it?
-			// But applyFunction doesn't know about 'self'.
-			// We can return a special "BoundMethod" object?
-			// Or we can return the function, but we need to inject 'self' when it is called.
-			// But here we are just evaluating the expression `obj.method`.
-			// If the next thing is `()`, it will be called.
-			// If we return the function as is, `applyFunction` will be called with arguments.
-			// But `self` is missing.
-			// We need to curry the function or something.
-			// Let's create a closure that wraps the function and injects `self`.
-
-			fn := method.(*object.Function)
+			define := method.(*object.Function)
 			// Create a new environment for the closure
-			closureEnv := object.NewEnclosedEnvironment(fn.Env)
+			closureEnv := object.NewEnclosedEnvironment(define.Env)
 			closureEnv.Set("self", instance)
 
-			return &object.Function{Parameters: fn.Parameters, Env: closureEnv, Body: fn.Body}
+			return &object.Function{Parameters: define.Parameters, Env: closureEnv, Body: define.Body}
 		}
 
 		return newError("property or method not found: %s", ident.Value)
@@ -1791,39 +1767,6 @@ func evalCForExpression(node *ast.CForExpression, env *object.Environment) objec
 			}
 		}
 
-		// Body
-		// Body should run in the loopEnv (so it sees init vars)
-		// But if body is a block, should it create ANOTHER scope?
-		// If `evalBlockStatement` doesn't create scope, then it uses `loopEnv`.
-		// This is correct for `for (int i=0...) { let x = 1; }`. `x` should be in `loopEnv` or inner?
-		// If `evalBlockStatement` doesn't create scope, `x` is in `loopEnv`.
-		// If we want `x` to be local to the block, `evalBlockStatement` should create scope.
-		// Let's modify `evalBlockStatement` to create scope?
-		// If I do that, `if (true) { let x = 1 } print(x)` will fail.
-		// In C, `if (1) { int x = 1; }` -> x is not visible outside.
-		// So yes, blocks should create scope.
-		// But I need to be careful.
-		// Let's stick to: `evalBlockStatement` does NOT create scope, but callers do if needed.
-		// For `CFor`, the `Init` variable `i` should be visible in `Body`.
-		// So `Body` should use `loopEnv`.
-		// But if `Body` creates variables, they should be in a scope inside `loopEnv`?
-		// Yes.
-		// So `evalBlockStatement` SHOULD create a scope.
-		// Let's change `evalBlockStatement` to create a scope.
-
-		// Wait, if I change `evalBlockStatement` to create scope, then `fn` body also creates scope.
-		// `applyFunction` creates an env and passes it to `Eval(body)`.
-		// If `Eval(body)` (which is a BlockStatement) creates ANOTHER env, it's fine.
-
-		// Let's change `evalBlockStatement` to create scope.
-		// But wait, `evalIfExpression` calls `Eval(consequence, env)`.
-		// If `consequence` is BlockStatement, it creates scope.
-		// This is correct for C-like languages.
-
-		// However, for `CFor`, we have `loopEnv` which contains `i`.
-		// The body should be evaluated in a scope enclosed by `loopEnv`.
-
-		// Let's do it here manually for now to avoid breaking other things if I'm unsure.
 		bodyEnv := object.NewEnclosedEnvironment(loopEnv)
 		result = evalBlockStatement(node.Body, bodyEnv)
 
@@ -1930,7 +1873,6 @@ func evalRangeExpression(node *ast.RangeExpression, env *object.Environment) obj
 }
 
 // unwrapObject converts a Victoria object to a Go interface{}
-// This is useful for functions like fmt.Sprintf that take interface{} arguments
 func unwrapObject(obj object.Object) interface{} {
 	switch obj := obj.(type) {
 	case *object.Integer:
@@ -2349,11 +2291,11 @@ func isCallable(obj object.Object) bool {
 
 // getParamCount returns the number of parameters for a callable
 func getParamCount(obj object.Object) int {
-	switch fn := obj.(type) {
+	switch define := obj.(type) {
 	case *object.Function:
-		return len(fn.Parameters)
+		return len(define.Parameters)
 	case *object.ArrowFunction:
-		return len(fn.Parameters)
+		return len(define.Parameters)
 	default:
 		return 0
 	}
@@ -2823,9 +2765,6 @@ func RegisterBuiltinModules() {
 					}
 					defer resp.Body.Close()
 
-					// Return headers as hash? Or just status?
-					// Let's return status code for now, or a hash with status and headers.
-					// For simplicity, let's return status code as integer.
 					return &object.Integer{Value: int64(resp.StatusCode)}
 				},
 			},
