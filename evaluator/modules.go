@@ -611,7 +611,7 @@ func RegisterBuiltinModules() {
 							switch res := result.(type) {
 							case *object.String:
 								w.Header().Set("Content-Type", "text/plain")
-								w.Write([]byte(res.Value))
+								_, _ = w.Write([]byte(res.Value))
 							case *object.Hash:
 								// Check for status, headers, body
 								for _, pair := range res.Pairs {
@@ -633,13 +633,13 @@ func RegisterBuiltinModules() {
 											}
 										case "body":
 											if bodyStr, ok := pair.Value.(*object.String); ok {
-												w.Write([]byte(bodyStr.Value))
+												_, _ = w.Write([]byte(bodyStr.Value))
 											}
 										}
 									}
 								}
 							default:
-								w.Write([]byte(result.Inspect()))
+								_, _ = w.Write([]byte(result.Inspect()))
 							}
 						}
 					})

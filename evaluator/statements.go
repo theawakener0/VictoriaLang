@@ -196,7 +196,8 @@ func evalCForExpression(node *ast.CForExpression, env *object.Environment) objec
 				break
 			}
 			if result.Type() == object.CONTINUE_OBJ {
-				// fall through to update
+				// Continue: fall through to update expression
+				_ = result // Explicit no-op to satisfy linter
 			}
 		}
 

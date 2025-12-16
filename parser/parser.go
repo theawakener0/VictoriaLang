@@ -204,22 +204,22 @@ func (p *Parser) peekError(t token.TokenType) {
 	// Add context-specific help
 	switch t {
 	case token.RBRACE:
-		richErr.WithHelp("you might be missing a closing brace '}'")
+		_ = richErr.WithHelp("you might be missing a closing brace '}'")
 	case token.RPAREN:
-		richErr.WithHelp("you might be missing a closing parenthesis ')'")
+		_ = richErr.WithHelp("you might be missing a closing parenthesis ')'")
 	case token.RBRACKET:
-		richErr.WithHelp("you might be missing a closing bracket ']'")
+		_ = richErr.WithHelp("you might be missing a closing bracket ']'")
 	case token.ASSIGN:
-		richErr.WithHelp("variable declarations require an initial value: let name = value")
+		_ = richErr.WithHelp("variable declarations require an initial value: let name = value")
 	case token.LBRACE:
-		richErr.WithHelp("expected a block starting with '{'")
+		_ = richErr.WithHelp("expected a block starting with '{'")
 	case token.IDENT:
-		richErr.WithHelp("expected an identifier (variable or function name)")
+		_ = richErr.WithHelp("expected an identifier (variable or function name)")
 	}
 
 	// Add note about what was found
 	if p.peekToken.Type == token.EOF {
-		richErr.WithNote("reached end of file unexpectedly")
+		_ = richErr.WithNote("reached end of file unexpectedly")
 	}
 
 	p.richErrors = append(p.richErrors, richErr)

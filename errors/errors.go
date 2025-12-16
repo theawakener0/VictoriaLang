@@ -4,13 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"time"
 )
-
-// Initialize random seed
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // Programming jokes to lighten the mood when errors occur
 var programmerJokes = []string{
@@ -222,15 +216,6 @@ func (e *VictoriaError) WithSource(source string) *VictoriaError {
 	return e
 }
 
-// getSourceLine extracts a specific line from source code
-func getSourceLine(source string, lineNum int) string {
-	lines := strings.Split(source, "\n")
-	if lineNum < 1 || lineNum > len(lines) {
-		return ""
-	}
-	return lines[lineNum-1]
-}
-
 // getSourceLines extracts multiple lines from source code
 func getSourceLines(source string, startLine, endLine int) []string {
 	lines := strings.Split(source, "\n")
@@ -426,7 +411,7 @@ func (e *VictoriaError) FormatPlain() string {
 	var sb strings.Builder
 
 	// Header
-	sb.WriteString(fmt.Sprintf("%s", e.Kind.String()))
+	sb.WriteString(e.Kind.String())
 	if e.Code != "" {
 		sb.WriteString(fmt.Sprintf("[%s]", e.Code))
 	}

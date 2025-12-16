@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+
 	"victoria/errors"
 	"victoria/evaluator"
 	"victoria/lexer"
@@ -37,8 +38,8 @@ func Start(in io.Reader, out io.Writer) {
 			richErrors := p.RichErrors()
 			if len(richErrors) > 0 {
 				for _, err := range richErrors {
-					io.WriteString(out, err.Format())
-					io.WriteString(out, "\n")
+					_, _ = io.WriteString(out, err.Format())
+					_, _ = io.WriteString(out, "\n")
 				}
 			} else {
 				printParserErrors(out, p.Errors())
@@ -50,19 +51,19 @@ func Start(in io.Reader, out io.Writer) {
 		if evaluated != nil {
 			if evaluated.Type() == object.ERROR_OBJ {
 				errObj := evaluated.(*object.Error)
-				io.WriteString(out, evaluator.FormatRichError(errObj))
-				io.WriteString(out, "\n")
+				_, _ = io.WriteString(out, evaluator.FormatRichError(errObj))
+				_, _ = io.WriteString(out, "\n")
 			} else if evaluated.Type() != object.NULL_OBJ {
-				io.WriteString(out, evaluated.Inspect())
-				io.WriteString(out, "\n")
+				_, _ = io.WriteString(out, evaluated.Inspect())
+				_, _ = io.WriteString(out, "\n")
 			}
 		}
 	}
 }
 
 func printParserErrors(out io.Writer, errs []string) {
-	io.WriteString(out, fmt.Sprintf("%s%serror%s: parser errors found\n", errors.Bold, errors.BrightRed, errors.Reset))
+	_, _ = io.WriteString(out, fmt.Sprintf("%s%serror%s: parser errors found\n", errors.Bold, errors.BrightRed, errors.Reset))
 	for _, msg := range errs {
-		io.WriteString(out, fmt.Sprintf("  %s|%s %s\n", errors.Cyan, errors.Reset, msg))
+		_, _ = io.WriteString(out, fmt.Sprintf("  %s|%s %s\n", errors.Cyan, errors.Reset, msg))
 	}
 }

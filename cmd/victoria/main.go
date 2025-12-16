@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+
 	"victoria/errors"
 	"victoria/evaluator"
 	"victoria/lexer"
@@ -25,7 +25,7 @@ func main() {
 }
 
 func runFile(filename string) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Printf("%s%serror%s: could not read file '%s'\n", errors.Bold, errors.BrightRed, errors.Reset, filename)
 		fmt.Printf("  %s|%s %v\n", errors.Cyan, errors.Reset, err)
