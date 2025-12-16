@@ -1,7 +1,7 @@
 # Victoria
 
 <p align="center">
-  <img src="media/QueenVictoria.jpg" alt="Queen Victoria" width="200">
+  <img src="media/QueenVictoria.jpg" alt="Queen Victoria">
 </p>
 
 <p align="center">
