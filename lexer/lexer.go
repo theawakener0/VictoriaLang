@@ -77,6 +77,11 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = token.Token{Type: token.DEC, Literal: literal, Line: l.line, Column: startCol, EndColumn: l.column + 1}
+		} else if l.peekChar() == '>' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.ARROW_RETURN, Literal: literal, Line: l.line, Column: startCol, EndColumn: l.column + 1}
 		} else {
 			tok = newTokenWithCol(token.MINUS, l.ch, l.line, startCol)
 		}

@@ -40,12 +40,28 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		if isError(val) {
 			return val
 		}
+		// Type check if type annotation is present
+		if node.Type != nil {
+			if !object.CheckType(val, node.Type) {
+				return newErrorWithLocation("type mismatch: cannot assign %s to variable of type %s",
+					node.Token.Line, node.Token.Column, node.Token.EndColumn+len(node.Name.Value),
+					object.TypeName(val), node.Type.String())
+			}
+		}
 		env.Set(node.Name.Value, val)
 
 	case *ast.ConstStatement:
 		val := Eval(node.Value, env)
 		if isError(val) {
 			return val
+		}
+		// Type check if type annotation is present
+		if node.Type != nil {
+			if !object.CheckType(val, node.Type) {
+				return newErrorWithLocation("type mismatch: cannot assign %s to constant of type %s",
+					node.Token.Line, node.Token.Column, node.Token.EndColumn+len(node.Name.Value),
+					object.TypeName(val), node.Type.String())
+			}
 		}
 		env.SetConst(node.Name.Value, val)
 
@@ -150,7 +166,13 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.FunctionLiteral:
 		params := node.Parameters
 		body := node.Body
-		return &object.Function{Parameters: params, Env: env, Body: body}
+		return &object.Function{
+			Parameters:      params,
+			TypedParameters: node.TypedParameters,
+			ReturnTypes:     node.ReturnTypes,
+			Env:             env,
+			Body:            body,
+		}
 
 	case *ast.ArrowFunction:
 		params := node.Parameters

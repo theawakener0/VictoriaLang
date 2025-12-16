@@ -9,7 +9,7 @@ import (
 // Programming jokes to lighten the mood when errors occur
 var programmerJokes = []string{
 	"Why do programmers prefer dark mode? Because light attracts bugs!",
-	"There are only 10 types of people: those who understand binary and those who don't.",
+	"There are only 2 types of people: those who understand binary and those who don't.",
 	"A SQL query walks into a bar, walks up to two tables and asks... 'Can I join you?'",
 	"Why do Java developers wear glasses? Because they don't C#!",
 	"How many programmers does it take to change a light bulb? None, that's a hardware problem.",
@@ -37,6 +37,15 @@ var programmerJokes = []string{
 	"In theory, there's no difference between theory and practice. In practice, there is.",
 	"Real programmers count from 0.",
 	"!false - It's funny because it's true.",
+	// Type system jokes
+	"A string walks into a bar. The bartender says, 'We don't serve your type here.'",
+	"Why did the type checker break up with the dynamic language? Too many unexpected surprises!",
+	"Strong typing: Because 'undefined is not a function' should never be a runtime error.",
+	"Types are like vegetables – you know they're good for you, but sometimes you just want dessert.",
+	"In a statically typed world, bugs are caught at compile time. In a dynamically typed world, bugs are caught in production.",
+	"Type inference: because sometimes the compiler knows you better than you know yourself.",
+	"Any: the type that says 'I give up, do whatever you want.'",
+	"void: for when your function has commitment issues about returning values.",
 }
 
 // getRandomJoke returns a random programming joke (30% chance)
@@ -1199,5 +1208,169 @@ func MemberAccessError(message string, typeName string, loc SourceLocation, sour
 			"dot access is for hashes, structs, and objects with methods",
 		},
 		Help: "for dynamic keys, use bracket notation: hash[\"key\"]",
+	}
+}
+
+// ============================================
+// TYPE SYSTEM ERRORS
+// ============================================
+
+// TypeAnnotationMismatchError creates a type mismatch error for typed variables/parameters
+func TypeAnnotationMismatchError(expected, actual, context string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0030",
+		Message:    fmt.Sprintf("type mismatch: expected %s, got %s", expected, actual),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("expected %s", expected), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("in %s: expected type '%s' but received '%s'", context, expected, actual),
+			"Victoria's type system helps catch errors early",
+		},
+		Help: fmt.Sprintf("ensure the value is of type %s, or adjust the type annotation", expected),
+	}
+}
+
+// VariableTypeMismatchError creates an error for variable type mismatches
+func VariableTypeMismatchError(varName, expected, actual string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0031",
+		Message:    fmt.Sprintf("cannot assign %s to variable '%s' of type %s", actual, varName, expected),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("expected %s, found %s", expected, actual), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("variable '%s' was declared with type annotation :%s", varName, expected),
+			"type annotations are enforced at runtime for type safety",
+		},
+		Help: fmt.Sprintf("either assign a %s value, or change the type annotation to :%s", expected, actual),
+	}
+}
+
+// ParameterTypeMismatchError creates an error for function parameter type mismatches
+func ParameterTypeMismatchError(paramName, funcName, expected, actual string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0032",
+		Message:    fmt.Sprintf("type mismatch for parameter '%s': expected %s, got %s", paramName, expected, actual),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("wrong type for parameter '%s'", paramName), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("function '%s' expects parameter '%s' to be of type %s", funcName, paramName, expected),
+			"typed parameters enforce type checking when the function is called",
+		},
+		Help: fmt.Sprintf("pass a %s value, or use type conversion: %s(value)", expected, expected),
+	}
+}
+
+// ReturnTypeMismatchError creates an error for function return type mismatches
+func ReturnTypeMismatchError(funcName, expected, actual string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0033",
+		Message:    fmt.Sprintf("return type mismatch: expected %s, got %s", expected, actual),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("returns %s, expected %s", actual, expected), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("function '%s' has return type annotation -> %s", funcName, expected),
+			"return type annotations ensure the function returns the expected type",
+		},
+		Help: fmt.Sprintf("return a %s value, or change the return type annotation", expected),
+	}
+}
+
+// InvalidTypeAnnotationError creates an error for invalid type annotations
+func InvalidTypeAnnotationError(typeName string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0034",
+		Message:    fmt.Sprintf("invalid type annotation: '%s'", typeName),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "unknown type", Primary: true},
+		},
+		Notes: []string{
+			"type annotations must be valid type names",
+			"built-in types: int, float, string, bool, char, array, map, any, void",
+		},
+		Help: "use a built-in type or a defined struct name",
+	}
+}
+
+// TypeAnnotationRequiredError creates an error when type annotation is required but missing
+func TypeAnnotationRequiredError(context string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0035",
+		Message:    fmt.Sprintf("type annotation required in %s", context),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "missing type annotation", Primary: true},
+		},
+		Notes: []string{
+			"some contexts require explicit type annotations",
+		},
+		Help: "add a type annotation using the syntax :type (e.g., x:int)",
+	}
+}
+
+// ArrayTypeMismatchError creates an error for array element type mismatches
+func ArrayTypeMismatchError(expected, actual string, index int, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0036",
+		Message:    fmt.Sprintf("array element type mismatch at index %d: expected %s, got %s", index, expected, actual),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("wrong element type at index %d", index), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("typed arrays ([]%s) require all elements to be of type %s", expected, expected),
+		},
+		Help: fmt.Sprintf("ensure all array elements are of type %s", expected),
+	}
+}
+
+// VoidReturnError creates an error for returning a value from void function
+func VoidReturnError(loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0037",
+		Message:    "cannot return a value from a void function",
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "unexpected return value", Primary: true},
+		},
+		Notes: []string{
+			"functions with return type -> void should not return a value",
+			"use 'return' without a value, or simply let the function end",
+		},
+		Help: "remove the return value, or change the return type annotation",
+	}
+}
+
+// MissingReturnError creates an error for missing return in typed function
+func MissingReturnError(funcName, expected string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0038",
+		Message:    fmt.Sprintf("function '%s' must return a value of type %s", funcName, expected),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "missing return statement", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("function '%s' has return type -> %s", funcName, expected),
+			"all code paths must return a value of the declared type",
+		},
+		Help: fmt.Sprintf("add a return statement that returns a %s value", expected),
 	}
 }

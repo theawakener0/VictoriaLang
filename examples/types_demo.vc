@@ -1,0 +1,136 @@
+// Victoria Type System Demo
+// This demonstrates the new Go-like type system in Victoria
+
+// ============================================
+// Basic Typed Variable Declarations
+// ============================================
+
+// Declare variables with explicit types
+let x:int = 42;
+let name:string = "Victoria";
+let pi:float = 3.14159;
+let isAwesome:bool = true;
+
+print("=== Basic Typed Variables ===");
+print("x (int):", x);
+print("name (string):", name);
+print("pi (float):", pi);
+print("isAwesome (bool):", isAwesome);
+
+// ============================================
+// Typed Constants
+// ============================================
+
+const MAX_VALUE:int = 100;
+const GREETING:string = "Hello, World!";
+
+print("\n=== Typed Constants ===");
+print("MAX_VALUE:", MAX_VALUE);
+print("GREETING:", GREETING);
+
+// ============================================
+// Typed Function Parameters
+// ============================================
+
+// Function with typed parameters and return type
+define add(a:int, b:int) -> int {
+    return a + b;
+}
+
+// Function with multiple typed parameters
+define greet(name:string, age:int) -> string {
+    return "Hello, " + name + "! You are " + string(age) + " years old.";
+}
+
+print("\n=== Typed Functions ===");
+print("add(5, 3):", add(5, 3));
+print("greet('Alice', 25):", greet("Alice", 25));
+
+// ============================================
+// Mixed: Typed and Untyped Parameters
+// ============================================
+
+// You can still use untyped parameters for flexibility
+define multiply(a, b) {
+    return a * b;
+}
+
+print("\n=== Backward Compatible (Untyped) ===");
+print("multiply(4, 5):", multiply(4, 5));
+
+// ============================================
+// Type Safety Demonstration
+// ============================================
+
+// Function with float return type
+define calculateAverage(a:int, b:int) -> float {
+    return (a + b) / 2.0;
+}
+
+print("\n=== Float Return Type ===");
+print("calculateAverage(10, 20):", calculateAverage(10, 20));
+
+// ============================================
+// Array Types
+// ============================================
+
+let numbers:array = [1, 2, 3, 4, 5];
+print("\n=== Array Type ===");
+print("numbers:", numbers);
+
+// ============================================
+// Functions with 'any' type (accepts anything)
+// ============================================
+
+define printValue(val:any) -> void {
+    print("Value:", val);
+}
+
+print("\n=== Any Type (accepts anything) ===");
+printValue(42);
+printValue("hello");
+printValue(true);
+printValue([1, 2, 3]);
+
+// ============================================
+// Type Checking in Action
+// ============================================
+
+define isEven(n:int) -> bool {
+    return n % 2 == 0;
+}
+
+print("\n=== Boolean Return Type ===");
+print("isEven(4):", isEven(4));
+print("isEven(7):", isEven(7));
+
+// ============================================
+// Complex Example: Factorial with Types
+// ============================================
+
+define factorial(n:int) -> int {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+print("\n=== Factorial Example ===");
+print("factorial(5):", factorial(5));
+print("factorial(10):", factorial(10));
+
+// ============================================
+// Fibonacci with Types
+// ============================================
+
+define fibonacci(n:int) -> int {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+print("\n=== Fibonacci Example ===");
+print("fibonacci(10):", fibonacci(10));
+
+print("\n=== Type System Demo Complete! ===");

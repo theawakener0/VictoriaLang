@@ -10,9 +10,39 @@ func applyFunction(fn object.Object, args []object.Object) object.Object {
 	}
 	switch fn := fn.(type) {
 	case *object.Function:
+		// Type check arguments if typed parameters are present
+		if len(fn.TypedParameters) > 0 {
+			if len(args) != len(fn.TypedParameters) {
+				return newError("wrong number of arguments: expected %d, got %d",
+					len(fn.TypedParameters), len(args))
+			}
+			for i, typedParam := range fn.TypedParameters {
+				if typedParam.Type != nil {
+					if !object.CheckType(args[i], typedParam.Type) {
+						return newError("type mismatch for parameter '%s': expected %s, got %s",
+							typedParam.Name.Value, typedParam.Type.String(), object.TypeName(args[i]))
+					}
+				}
+			}
+		}
+
 		extendedEnv := extendFunctionEnv(fn, args)
 		evaluated := Eval(fn.Body, extendedEnv)
-		return unwrapReturnValue(evaluated)
+		result := unwrapReturnValue(evaluated)
+
+		// Type check return value if return types are specified
+		if len(fn.ReturnTypes) > 0 && !isError(result) {
+			// For single return type
+			if len(fn.ReturnTypes) == 1 {
+				if !object.CheckType(result, fn.ReturnTypes[0]) {
+					return newError("return type mismatch: expected %s, got %s",
+						fn.ReturnTypes[0].String(), object.TypeName(result))
+				}
+			}
+			// Multiple return types could be supported with tuple unpacking
+		}
+
+		return result
 
 	case *object.ArrowFunction:
 		extendedEnv := extendArrowFunctionEnv(fn, args)

@@ -71,7 +71,55 @@ func FormatRichError(err *object.Error) string {
 	// TYPE MISMATCH ERRORS
 	if strings.Contains(msg, "type mismatch") {
 		_ = richErr.WithCode("E0001")
-		_ = richErr.WithNote("Victoria is dynamically typed, but operators require compatible types")
+
+		// Handle typed variable declaration errors
+		if strings.Contains(msg, "cannot assign") && strings.Contains(msg, "to variable of type") {
+			_ = richErr.WithNote("Victoria supports optional static typing for type safety")
+			parts := strings.Split(msg, "cannot assign ")
+			if len(parts) > 1 {
+				typeParts := strings.Split(parts[1], " to variable of type ")
+				if len(typeParts) == 2 {
+					actualType := strings.TrimSpace(typeParts[0])
+					expectedType := strings.TrimSpace(typeParts[1])
+					_ = richErr.WithHelp(fmt.Sprintf("either change the value to a %s, or change the type annotation to :%s", expectedType, actualType))
+				}
+			}
+		} else if strings.Contains(msg, "cannot assign") && strings.Contains(msg, "to constant of type") {
+			_ = richErr.WithNote("constants with type annotations must match the declared type")
+			_ = richErr.WithHelp("ensure the value matches the declared type, or remove the type annotation")
+		} else if strings.Contains(msg, "for parameter") {
+			// Function parameter type mismatch
+			_ = richErr.WithNote("function parameters with type annotations enforce type checking at runtime")
+			if strings.Contains(msg, "expected int") {
+				_ = richErr.WithHelp("pass an integer value, or use int() to convert: int(value)")
+			} else if strings.Contains(msg, "expected string") {
+				_ = richErr.WithHelp("pass a string value, or use string() to convert: string(value)")
+			} else if strings.Contains(msg, "expected float") {
+				_ = richErr.WithHelp("pass a float value - integers are automatically converted to float")
+			} else if strings.Contains(msg, "expected bool") {
+				_ = richErr.WithHelp("pass a boolean value (true or false)")
+			} else if strings.Contains(msg, "expected array") {
+				_ = richErr.WithHelp("pass an array value: [element1, element2, ...]")
+			} else {
+				_ = richErr.WithHelp("ensure the argument matches the expected parameter type")
+			}
+		} else if strings.Contains(msg, "return type mismatch") {
+			// Return type mismatch
+			_ = richErr.WithNote("functions with return type annotations must return matching types")
+			if strings.Contains(msg, "expected int") {
+				_ = richErr.WithHelp("return an integer value, or change the return type annotation")
+			} else if strings.Contains(msg, "expected string") {
+				_ = richErr.WithHelp("return a string value, or change the return type annotation")
+			} else if strings.Contains(msg, "expected bool") {
+				_ = richErr.WithHelp("return true or false, or change the return type annotation")
+			} else if strings.Contains(msg, "expected void") {
+				_ = richErr.WithHelp("remove the return statement, or change the return type from 'void'")
+			} else {
+				_ = richErr.WithHelp("ensure the return value matches the declared return type")
+			}
+		} else {
+			_ = richErr.WithNote("Victoria is dynamically typed, but operators require compatible types")
+		}
 
 		if strings.Contains(msg, "STRING") && strings.Contains(msg, "INTEGER") {
 			_ = richErr.WithNote("strings and integers cannot be combined directly with arithmetic operators")
@@ -214,7 +262,14 @@ func FormatRichError(err *object.Error) string {
 
 	} else if strings.Contains(msg, "wrong number of arguments") {
 		_ = richErr.WithCode("E0010")
-		_ = richErr.WithNote("function called with incorrect number of arguments")
+
+		// Check if this is from a typed function
+		if strings.Contains(msg, "expected") && strings.Contains(msg, "got") {
+			_ = richErr.WithNote("typed functions enforce parameter count at runtime")
+			_ = richErr.WithHelp("check the function definition for the correct number of parameters")
+		} else {
+			_ = richErr.WithNote("function called with incorrect number of arguments")
+		}
 
 		if strings.Contains(msg, "len") {
 			_ = richErr.WithHelp("len() takes exactly 1 argument: len(array) or len(string)")
@@ -251,6 +306,20 @@ func FormatRichError(err *object.Error) string {
 		_ = richErr.WithCode("E0023")
 		_ = richErr.WithNote("cannot divide by zero")
 		_ = richErr.WithHelp("check the divisor is not zero before dividing")
+
+	} else if strings.Contains(msg, "expected type") || strings.Contains(msg, "invalid type") {
+		// Type annotation parsing errors
+		_ = richErr.WithCode("E0030")
+		_ = richErr.WithNote("type annotations specify the expected type of a value")
+		_ = richErr.WithHelp("valid types: int, float, string, bool, char, array, map, any, void")
+
+	} else if strings.Contains(msg, "cannot use type") {
+		// Type usage errors
+		_ = richErr.WithCode("E0031")
+		_ = richErr.WithNote("some types have restrictions on where they can be used")
+		if strings.Contains(msg, "void") {
+			_ = richErr.WithHelp("'void' can only be used as a function return type")
+		}
 	}
 
 	return richErr.Format()

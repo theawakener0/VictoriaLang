@@ -41,10 +41,46 @@ func (p *Program) String() string {
 	return out.String()
 }
 
+// TypeAnnotation represents a type annotation like :int, :string, :array[int], etc.
+type TypeAnnotation struct {
+	Token       token.Token     // The type token (e.g., TYPE_INT, TYPE_STRING, or IDENT for custom types)
+	TypeName    string          // The type name as string (e.g., "int", "string", "MyStruct")
+	IsArray     bool            // True if this is an array type like []int
+	ElementType *TypeAnnotation // For arrays/maps, the element type
+	KeyType     *TypeAnnotation // For maps, the key type
+}
+
+func (ta *TypeAnnotation) String() string {
+	if ta == nil {
+		return ""
+	}
+	if ta.IsArray {
+		return "[]" + ta.ElementType.String()
+	}
+	if ta.KeyType != nil && ta.ElementType != nil {
+		return "map[" + ta.KeyType.String() + "]" + ta.ElementType.String()
+	}
+	return ta.TypeName
+}
+
+// TypedParameter represents a parameter with a type annotation: x:int
+type TypedParameter struct {
+	Name *Identifier
+	Type *TypeAnnotation
+}
+
+func (tp *TypedParameter) String() string {
+	if tp.Type == nil {
+		return tp.Name.String()
+	}
+	return tp.Name.String() + ":" + tp.Type.String()
+}
+
 // LetStatement
 type LetStatement struct {
 	Token token.Token // the token.LET token
 	Name  *Identifier
+	Type  *TypeAnnotation // Optional type annotation
 	Value Expression
 }
 
@@ -54,6 +90,10 @@ func (ls *LetStatement) String() string {
 	var out bytes.Buffer
 	out.WriteString(ls.TokenLiteral() + " ")
 	out.WriteString(ls.Name.String())
+	if ls.Type != nil {
+		out.WriteString(":")
+		out.WriteString(ls.Type.String())
+	}
 	out.WriteString(" = ")
 	if ls.Value != nil {
 		out.WriteString(ls.Value.String())
@@ -66,6 +106,7 @@ func (ls *LetStatement) String() string {
 type ConstStatement struct {
 	Token token.Token // the token.CONST token
 	Name  *Identifier
+	Type  *TypeAnnotation // Optional type annotation
 	Value Expression
 }
 
@@ -75,6 +116,10 @@ func (cs *ConstStatement) String() string {
 	var out bytes.Buffer
 	out.WriteString("const ")
 	out.WriteString(cs.Name.String())
+	if cs.Type != nil {
+		out.WriteString(":")
+		out.WriteString(cs.Type.String())
+	}
 	out.WriteString(" = ")
 	if cs.Value != nil {
 		out.WriteString(cs.Value.String())
@@ -294,10 +339,12 @@ func (ie *IfExpression) String() string {
 
 // FunctionLiteral
 type FunctionLiteral struct {
-	Token      token.Token // The 'define' token
-	Name       string      // Optional name, for methods or named functions
-	Parameters []*Identifier
-	Body       *BlockStatement
+	Token           token.Token // The 'define' token
+	Name            string      // Optional name, for methods or named functions
+	Parameters      []*Identifier
+	TypedParameters []*TypedParameter // Parameters with type annotations
+	ReturnTypes     []*TypeAnnotation // Return type(s) - supports multiple return types like Go
+	Body            *BlockStatement
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
@@ -310,11 +357,32 @@ func (fl *FunctionLiteral) String() string {
 	}
 	out.WriteString("(")
 	params := []string{}
-	for _, p := range fl.Parameters {
-		params = append(params, p.String())
+	// Use typed parameters if available, otherwise use regular parameters
+	if len(fl.TypedParameters) > 0 {
+		for _, p := range fl.TypedParameters {
+			params = append(params, p.String())
+		}
+	} else {
+		for _, p := range fl.Parameters {
+			params = append(params, p.String())
+		}
 	}
 	out.WriteString(strings.Join(params, ", "))
-	out.WriteString(") ")
+	out.WriteString(")")
+	// Add return types if present
+	if len(fl.ReturnTypes) > 0 {
+		out.WriteString(" -> ")
+		if len(fl.ReturnTypes) == 1 {
+			out.WriteString(fl.ReturnTypes[0].String())
+		} else {
+			types := []string{}
+			for _, rt := range fl.ReturnTypes {
+				types = append(types, rt.String())
+			}
+			out.WriteString(strings.Join(types, ", "))
+		}
+	}
+	out.WriteString(" ")
 	out.WriteString(fl.Body.String())
 	return out.String()
 }
@@ -567,11 +635,13 @@ func (cfe *CForExpression) String() string {
 
 // MethodDefinition
 type MethodDefinition struct {
-	Token      token.Token // 'define'
-	StructName *Identifier
-	MethodName *Identifier
-	Parameters []*Identifier
-	Body       *BlockStatement
+	Token           token.Token // 'define'
+	StructName      *Identifier
+	MethodName      *Identifier
+	Parameters      []*Identifier
+	TypedParameters []*TypedParameter // Parameters with type annotations
+	ReturnTypes     []*TypeAnnotation // Return type(s)
+	Body            *BlockStatement
 }
 
 func (md *MethodDefinition) statementNode()       {}
@@ -584,7 +654,31 @@ func (md *MethodDefinition) String() string {
 	out.WriteString(md.MethodName.String())
 	out.WriteString("(")
 	// params
-	out.WriteString(") ")
+	params := []string{}
+	if len(md.TypedParameters) > 0 {
+		for _, p := range md.TypedParameters {
+			params = append(params, p.String())
+		}
+	} else {
+		for _, p := range md.Parameters {
+			params = append(params, p.String())
+		}
+	}
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(")")
+	if len(md.ReturnTypes) > 0 {
+		out.WriteString(" -> ")
+		if len(md.ReturnTypes) == 1 {
+			out.WriteString(md.ReturnTypes[0].String())
+		} else {
+			types := []string{}
+			for _, rt := range md.ReturnTypes {
+				types = append(types, rt.String())
+			}
+			out.WriteString(strings.Join(types, ", "))
+		}
+	}
+	out.WriteString(" ")
 	out.WriteString(md.Body.String())
 	return out.String()
 }

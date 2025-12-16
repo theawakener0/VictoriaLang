@@ -1,7 +1,7 @@
 // Structs
 struct Student {
-    name
-    age
+    name: string
+    age: int
 }
 
 define Student.greet() {

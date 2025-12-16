@@ -1,15 +1,18 @@
 # Victoria Language Documentation
 
-Victoria is a dynamic, interpreted programming language designed for readability and expressiveness. It combines features from C-style languages (like curly braces) with Python-like simplicity.
+Victoria is a dynamic, interpreted programming language designed for readability and expressiveness. It combines features from C-style languages (like curly braces) with Python-like simplicity. Victoria supports **optional static typing** inspired by Go, making it great for learning and prototyping while enabling type safety when needed.
 
 ## Table of Contents
 
 - [Variables](#variables)
   - [Constant Variables](#constant-variables)
+  - [Type Annotations](#type-annotations)
 - [Data Types](#data-types)
+- [Type System](#type-system)
 - [Operators](#operators)
 - [Control Flow](#control-flow)
 - [Functions](#functions)
+  - [Typed Functions](#typed-functions)
   - [Lambda Functions (Arrow Functions)](#lambda-functions-arrow-functions)
 - [Data Structures](#data-structures)
   - [Array Slicing](#array-slicing)
@@ -56,6 +59,41 @@ PI = 3.0        // ERROR: cannot reassign constant variable: PI
 ```
 
 Constants are useful for values that should never change, like configuration values, mathematical constants, or API keys.
+
+### Type Annotations
+
+Victoria supports optional type annotations for variables, inspired by Go's type system:
+
+```victoria
+let x:int = 42
+let name:string = "Victoria"
+let pi:float = 3.14159
+let isReady:bool = true
+```
+
+When a type is specified, Victoria will check that the assigned value matches the declared type:
+
+```victoria
+let x:int = "hello"  // ERROR: type mismatch: cannot assign string to variable of type int
+```
+
+Available types:
+- `int` - Integer numbers
+- `float` - Floating-point numbers
+- `string` - Text strings
+- `bool` - Boolean values (true/false)
+- `char` - Single character (single-char string)
+- `array` - Arrays/lists
+- `map` - Hash maps/dictionaries
+- `any` - Any type (disables type checking)
+- `void` - No value (for functions that don't return)
+
+Type annotations are **optional** - you can mix typed and untyped code:
+
+```victoria
+let typed:int = 42     // typed variable
+let untyped = "hello"  // untyped (dynamic) variable
+```
 
 ## Data Types
 
@@ -332,6 +370,54 @@ let multiply = define(x, y) {
 }
 
 print(multiply(3, 4))  // 12
+```
+
+### Typed Functions
+
+Victoria supports Go-style typed function parameters and return types:
+
+```victoria
+// Function with typed parameters
+define add(a:int, b:int) -> int {
+    return a + b
+}
+
+// Multiple return values with different types
+define greet(name:string, age:int) -> string {
+    return "Hello, " + name + "! You are " + string(age) + " years old."
+}
+
+// Function with any type (accepts anything)
+define printValue(val:any) -> void {
+    print("Value:", val)
+}
+```
+
+Type checking happens at runtime when functions are called:
+
+```victoria
+define add(a:int, b:int) -> int {
+    return a + b
+}
+
+add(5, 3)        // OK - both arguments are int
+add("hello", 5)  // ERROR: type mismatch for parameter 'a': expected int, got string
+```
+
+Return types are also checked:
+
+```victoria
+define getNumber() -> int {
+    return "not a number"  // ERROR: return type mismatch: expected int, got string
+}
+```
+
+You can mix typed and untyped parameters for flexibility:
+
+```victoria
+define log(message:string, data) {
+    print(message, data)
+}
 ```
 
 ### Higher-Order Functions

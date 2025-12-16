@@ -1,0 +1,54 @@
+// Victoria Type Error Demo
+// This demonstrates type checking errors in Victoria
+
+// Uncomment each section to see the type errors
+
+// ============================================
+// Error 1: Wrong type in variable declaration
+// ============================================
+
+// This should cause an error: assigning string to int
+// let x:int = "hello";
+
+// ============================================
+// Error 2: Wrong argument type in function call
+// ============================================
+
+define add(a:int, b:int) -> int {
+    return a + b;
+}
+
+// This works:
+print("add(5, 3):", add(5, 3));
+
+// Uncomment to see type error:
+// print("add with wrong types:", add("hello", 5));
+
+// ============================================
+// Error 3: Wrong return type
+// ============================================
+
+define getString() -> string {
+    return "Hello!";
+}
+
+print("getString():", getString());
+
+// This function would cause a return type error:
+// define badReturnType() -> int {
+//     return "not an int";
+// }
+
+// ============================================
+// Type checking is optional!
+// ============================================
+
+// You can still use Victoria without types for quick prototyping
+let dynamic = 42;
+dynamic = "now I'm a string";
+dynamic = [1, 2, 3];
+
+print("\nDynamic typing still works:", dynamic);
+
+print("\n=== Type Error Demo Complete ===");
+print("Uncomment the error examples to see type checking in action!");

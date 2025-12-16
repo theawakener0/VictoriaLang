@@ -95,22 +95,39 @@ func (e *Error) Type() ObjectType { return ERROR_OBJ }
 func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
 
 type Function struct {
-	Parameters []*ast.Identifier
-	Body       *ast.BlockStatement
-	Env        *Environment
+	Parameters      []*ast.Identifier
+	TypedParameters []*ast.TypedParameter // Parameters with type annotations
+	ReturnTypes     []*ast.TypeAnnotation // Return type(s)
+	Body            *ast.BlockStatement
+	Env             *Environment
 }
 
 func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
 func (f *Function) Inspect() string {
 	var out bytes.Buffer
 	params := []string{}
-	for _, p := range f.Parameters {
-		params = append(params, p.String())
+	if len(f.TypedParameters) > 0 {
+		for _, p := range f.TypedParameters {
+			params = append(params, p.String())
+		}
+	} else {
+		for _, p := range f.Parameters {
+			params = append(params, p.String())
+		}
 	}
 	out.WriteString("fn")
 	out.WriteString("(")
 	out.WriteString(strings.Join(params, ", "))
-	out.WriteString(") {\n")
+	out.WriteString(")")
+	if len(f.ReturnTypes) > 0 {
+		out.WriteString(" -> ")
+		types := []string{}
+		for _, rt := range f.ReturnTypes {
+			types = append(types, rt.String())
+		}
+		out.WriteString(strings.Join(types, ", "))
+	}
+	out.WriteString(" {\n")
 	out.WriteString(f.Body.String())
 	out.WriteString("\n}")
 	return out.String()
@@ -318,3 +335,110 @@ type Range struct {
 
 func (r *Range) Type() ObjectType { return RANGE_OBJ }
 func (r *Range) Inspect() string  { return fmt.Sprintf("%d..%d", r.Start, r.End) }
+
+// TypeChecker provides type validation utilities
+// CheckType validates if an object matches the expected type annotation
+func CheckType(obj Object, typeAnn *ast.TypeAnnotation) bool {
+	if typeAnn == nil {
+		return true // No type annotation means any type is allowed
+	}
+
+	typeName := typeAnn.TypeName
+
+	// Handle 'any' type - matches anything
+	if typeName == "any" {
+		return true
+	}
+
+	// Handle array types
+	if typeAnn.IsArray {
+		arr, ok := obj.(*Array)
+		if !ok {
+			return false
+		}
+		// If element type is specified, check all elements
+		if typeAnn.ElementType != nil {
+			for _, elem := range arr.Elements {
+				if !CheckType(elem, typeAnn.ElementType) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	// Handle map types
+	if typeAnn.KeyType != nil && typeAnn.ElementType != nil {
+		_, ok := obj.(*Hash)
+		return ok // For now, just check if it's a hash; deeper checking can be added
+	}
+
+	// Handle basic types
+	switch typeName {
+	case "int":
+		_, ok := obj.(*Integer)
+		return ok
+	case "float":
+		// Allow int as float for convenience (like Go)
+		_, isFloat := obj.(*Float)
+		_, isInt := obj.(*Integer)
+		return isFloat || isInt
+	case "string":
+		_, ok := obj.(*String)
+		return ok
+	case "bool":
+		_, ok := obj.(*Boolean)
+		return ok
+	case "char":
+		// Char is represented as a single-character string
+		s, ok := obj.(*String)
+		if !ok {
+			return false
+		}
+		return len(s.Value) == 1
+	case "array":
+		_, ok := obj.(*Array)
+		return ok
+	case "map":
+		_, ok := obj.(*Hash)
+		return ok
+	case "void":
+		_, ok := obj.(*Null)
+		return ok
+	default:
+		// Custom type (struct) - check if it's a struct instance with matching name
+		si, ok := obj.(*StructInstance)
+		if ok && si.Struct.Name == typeName {
+			return true
+		}
+		return false
+	}
+}
+
+// TypeName returns the type name of an object as a string
+func TypeName(obj Object) string {
+	switch obj := obj.(type) {
+	case *Integer:
+		return "int"
+	case *Float:
+		return "float"
+	case *String:
+		return "string"
+	case *Boolean:
+		return "bool"
+	case *Array:
+		return "array"
+	case *Hash:
+		return "map"
+	case *Null:
+		return "void"
+	case *Function:
+		return "function"
+	case *ArrowFunction:
+		return "function"
+	case *StructInstance:
+		return obj.Struct.Name
+	default:
+		return string(obj.Type())
+	}
+}

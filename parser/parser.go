@@ -109,6 +109,17 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.DEC, p.parsePrefixIncDec)
 	p.registerPrefix(token.SPREAD, p.parseSpreadExpression)
 
+	// Allow type keywords to be used as identifiers in expression context
+	// This allows builtin functions like string(), int(), float(), bool() to work
+	p.registerPrefix(token.TYPE_STRING, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_INT, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_FLOAT, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_BOOL, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_CHAR, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_ARRAY, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_MAP, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_ANY, p.parseTypeKeywordAsIdentifier)
+
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
@@ -286,6 +297,15 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 
 	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
+	// Check for optional type annotation: let x:int = ...
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		stmt.Type = p.parseTypeAnnotation()
+		if stmt.Type == nil {
+			return nil
+		}
+	}
+
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}
@@ -309,6 +329,15 @@ func (p *Parser) parseConstStatement() *ast.ConstStatement {
 	}
 
 	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	// Check for optional type annotation: const x:int = ...
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		stmt.Type = p.parseTypeAnnotation()
+		if stmt.Type == nil {
+			return nil
+		}
+	}
 
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
@@ -473,7 +502,19 @@ func (p *Parser) parseFunctionOrMethodDeclaration() ast.Statement {
 			return nil
 		}
 
-		methodDef.Parameters = p.parseFunctionParameters()
+		// Parse parameters with optional type annotations
+		params, typedParams := p.parseTypedFunctionParameters()
+		methodDef.Parameters = params
+		methodDef.TypedParameters = typedParams
+
+		// Check for return type annotation: -> type
+		if p.peekTokenIs(token.ARROW_RETURN) {
+			p.nextToken() // consume '->'
+			methodDef.ReturnTypes = p.parseReturnTypes()
+			if methodDef.ReturnTypes == nil {
+				return nil
+			}
+		}
 
 		if !p.expectPeek(token.LBRACE) {
 			return nil
@@ -491,7 +532,19 @@ func (p *Parser) parseFunctionOrMethodDeclaration() ast.Statement {
 			return nil
 		}
 
-		defineLit.Parameters = p.parseFunctionParameters()
+		// Parse parameters with optional type annotations
+		params, typedParams := p.parseTypedFunctionParameters()
+		defineLit.Parameters = params
+		defineLit.TypedParameters = typedParams
+
+		// Check for return type annotation: -> type
+		if p.peekTokenIs(token.ARROW_RETURN) {
+			p.nextToken() // consume '->'
+			defineLit.ReturnTypes = p.parseReturnTypes()
+			if defineLit.ReturnTypes == nil {
+				return nil
+			}
+		}
 
 		if !p.expectPeek(token.LBRACE) {
 			return nil
@@ -564,6 +617,20 @@ func (p *Parser) parseIdentifier() ast.Expression {
 		return p.parseStructInstantiation()
 	}
 	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+// parseTypeKeywordAsIdentifier allows type keywords (string, int, etc.) to be used
+// as identifiers in expression context, enabling builtin functions like string(), int()
+func (p *Parser) parseTypeKeywordAsIdentifier() ast.Expression {
+	// Convert the type keyword token to an identifier
+	identToken := token.Token{
+		Type:      token.IDENT,
+		Literal:   token.TypeKeywordToString(p.curToken.Type),
+		Line:      p.curToken.Line,
+		Column:    p.curToken.Column,
+		EndColumn: p.curToken.EndColumn,
+	}
+	return &ast.Identifier{Token: identToken, Value: identToken.Literal}
 }
 
 func (p *Parser) parseStructInstantiation() ast.Expression {
@@ -865,7 +932,19 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 		return nil
 	}
 
-	lit.Parameters = p.parseFunctionParameters()
+	// Parse parameters with optional type annotations
+	params, typedParams := p.parseTypedFunctionParameters()
+	lit.Parameters = params
+	lit.TypedParameters = typedParams
+
+	// Check for return type annotation: -> type
+	if p.peekTokenIs(token.ARROW_RETURN) {
+		p.nextToken() // consume '->'
+		lit.ReturnTypes = p.parseReturnTypes()
+		if lit.ReturnTypes == nil {
+			return nil
+		}
+	}
 
 	if !p.expectPeek(token.LBRACE) {
 		return nil
@@ -901,6 +980,175 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 	}
 
 	return identifiers
+}
+
+// parseTypeAnnotation parses a type annotation after a colon (:)
+// Supports: int, string, bool, float, char, []int (arrays), map[string]int, and custom types
+func (p *Parser) parseTypeAnnotation() *ast.TypeAnnotation {
+	p.nextToken() // consume the current token to move to the type
+
+	typeAnn := &ast.TypeAnnotation{Token: p.curToken}
+
+	// Check for array type: []type
+	if p.curTokenIs(token.LBRACKET) {
+		if !p.expectPeek(token.RBRACKET) {
+			return nil
+		}
+		typeAnn.IsArray = true
+		p.nextToken() // move to element type
+		typeAnn.ElementType = &ast.TypeAnnotation{Token: p.curToken}
+		if token.IsTypeKeyword(p.curToken.Type) {
+			typeAnn.ElementType.TypeName = token.TypeKeywordToString(p.curToken.Type)
+		} else if p.curTokenIs(token.IDENT) {
+			typeAnn.ElementType.TypeName = p.curToken.Literal
+		} else {
+			msg := fmt.Sprintf("expected type after '[]', got %s", p.curToken.Type)
+			p.errors = append(p.errors, msg)
+			return nil
+		}
+		return typeAnn
+	}
+
+	// Check for map type: map[keyType]valueType
+	if p.curTokenIs(token.TYPE_MAP) {
+		if !p.expectPeek(token.LBRACKET) {
+			return nil
+		}
+		p.nextToken() // move to key type
+		typeAnn.KeyType = &ast.TypeAnnotation{Token: p.curToken}
+		if token.IsTypeKeyword(p.curToken.Type) {
+			typeAnn.KeyType.TypeName = token.TypeKeywordToString(p.curToken.Type)
+		} else if p.curTokenIs(token.IDENT) {
+			typeAnn.KeyType.TypeName = p.curToken.Literal
+		} else {
+			msg := fmt.Sprintf("expected type in map key, got %s", p.curToken.Type)
+			p.errors = append(p.errors, msg)
+			return nil
+		}
+		if !p.expectPeek(token.RBRACKET) {
+			return nil
+		}
+		p.nextToken() // move to value type
+		typeAnn.ElementType = &ast.TypeAnnotation{Token: p.curToken}
+		if token.IsTypeKeyword(p.curToken.Type) {
+			typeAnn.ElementType.TypeName = token.TypeKeywordToString(p.curToken.Type)
+		} else if p.curTokenIs(token.IDENT) {
+			typeAnn.ElementType.TypeName = p.curToken.Literal
+		} else {
+			msg := fmt.Sprintf("expected type after map key type, got %s", p.curToken.Type)
+			p.errors = append(p.errors, msg)
+			return nil
+		}
+		typeAnn.TypeName = "map"
+		return typeAnn
+	}
+
+	// Handle basic types or custom type names (IDENT)
+	if token.IsTypeKeyword(p.curToken.Type) {
+		typeAnn.TypeName = token.TypeKeywordToString(p.curToken.Type)
+	} else if p.curTokenIs(token.IDENT) {
+		// Custom type like a struct name
+		typeAnn.TypeName = p.curToken.Literal
+	} else {
+		msg := fmt.Sprintf("expected type annotation, got %s", p.curToken.Type)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	return typeAnn
+}
+
+// parseTypedFunctionParameters parses function parameters with type annotations
+// e.g., (x:int, y:string) or (x, y) for backwards compatibility
+func (p *Parser) parseTypedFunctionParameters() ([]*ast.Identifier, []*ast.TypedParameter) {
+	identifiers := []*ast.Identifier{}
+	typedParams := []*ast.TypedParameter{}
+	hasTypes := false
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return identifiers, typedParams
+	}
+
+	p.nextToken()
+
+	// Parse first parameter
+	if !p.curTokenIs(token.IDENT) {
+		return nil, nil
+	}
+	ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	// Check for type annotation
+	var typeAnn *ast.TypeAnnotation
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		typeAnn = p.parseTypeAnnotation()
+		if typeAnn == nil {
+			return nil, nil
+		}
+		hasTypes = true
+	}
+	typedParams = append(typedParams, &ast.TypedParameter{Name: ident, Type: typeAnn})
+
+	// Parse remaining parameters
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume ','
+		p.nextToken() // move to next parameter name
+
+		if !p.curTokenIs(token.IDENT) {
+			return nil, nil
+		}
+		ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		identifiers = append(identifiers, ident)
+
+		// Check for type annotation
+		var typeAnn *ast.TypeAnnotation
+		if p.peekTokenIs(token.COLON) {
+			p.nextToken() // consume ':'
+			typeAnn = p.parseTypeAnnotation()
+			if typeAnn == nil {
+				return nil, nil
+			}
+			hasTypes = true
+		}
+		typedParams = append(typedParams, &ast.TypedParameter{Name: ident, Type: typeAnn})
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil, nil
+	}
+
+	// Only return typed params if at least one parameter has a type
+	if hasTypes {
+		return identifiers, typedParams
+	}
+	return identifiers, nil
+}
+
+// parseReturnTypes parses return types after -> in function definition
+// Supports single type: -> int, or multiple types: -> int, bool
+func (p *Parser) parseReturnTypes() []*ast.TypeAnnotation {
+	returnTypes := []*ast.TypeAnnotation{}
+
+	// First return type
+	typeAnn := p.parseTypeAnnotation()
+	if typeAnn == nil {
+		return nil
+	}
+	returnTypes = append(returnTypes, typeAnn)
+
+	// Check for multiple return types (comma-separated)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume ','
+		typeAnn := p.parseTypeAnnotation()
+		if typeAnn == nil {
+			return nil
+		}
+		returnTypes = append(returnTypes, typeAnn)
+	}
+
+	return returnTypes
 }
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
