@@ -128,6 +128,61 @@ func (cs *ConstStatement) String() string {
 	return out.String()
 }
 
+// MakeStatement - preprocessor directive like C's #define
+// #make NAME VALUE
+type MakeStatement struct {
+	Token token.Token // the #make token
+	Name  *Identifier
+	Value Expression
+}
+
+func (ms *MakeStatement) statementNode()       {}
+func (ms *MakeStatement) TokenLiteral() string { return ms.Token.Literal }
+func (ms *MakeStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("#make ")
+	out.WriteString(ms.Name.String())
+	out.WriteString(" ")
+	if ms.Value != nil {
+		out.WriteString(ms.Value.String())
+	}
+	return out.String()
+}
+
+// EnumStatement - enum type definition
+// enum Color { RED, GREEN, BLUE }
+type EnumStatement struct {
+	Token  token.Token // the 'enum' token
+	Name   *Identifier
+	Values []*EnumValue
+}
+
+// EnumValue represents a single enum variant
+type EnumValue struct {
+	Name  *Identifier
+	Value Expression // Optional explicit value
+}
+
+func (es *EnumStatement) statementNode()       {}
+func (es *EnumStatement) TokenLiteral() string { return es.Token.Literal }
+func (es *EnumStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("enum ")
+	out.WriteString(es.Name.String())
+	out.WriteString(" { ")
+	values := []string{}
+	for _, v := range es.Values {
+		if v.Value != nil {
+			values = append(values, v.Name.String()+" = "+v.Value.String())
+		} else {
+			values = append(values, v.Name.String())
+		}
+	}
+	out.WriteString(strings.Join(values, ", "))
+	out.WriteString(" }")
+	return out.String()
+}
+
 // ReturnStatement
 type ReturnStatement struct {
 	Token       token.Token // the 'return' token
@@ -266,6 +321,16 @@ func (fl *FloatLiteral) expressionNode()      {}
 func (fl *FloatLiteral) TokenLiteral() string { return fl.Token.Literal }
 func (fl *FloatLiteral) String() string       { return fl.Token.Literal }
 
+// CharLiteral represents a character literal like 'a'
+type CharLiteral struct {
+	Token token.Token
+	Value rune
+}
+
+func (cl *CharLiteral) expressionNode()      {}
+func (cl *CharLiteral) TokenLiteral() string { return cl.Token.Literal }
+func (cl *CharLiteral) String() string       { return "'" + string(cl.Value) + "'" }
+
 // Boolean
 type Boolean struct {
 	Token token.Token
@@ -275,6 +340,15 @@ type Boolean struct {
 func (b *Boolean) expressionNode()      {}
 func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
 func (b *Boolean) String() string       { return b.Token.Literal }
+
+// NullLiteral represents the null value
+type NullLiteral struct {
+	Token token.Token
+}
+
+func (nl *NullLiteral) expressionNode()      {}
+func (nl *NullLiteral) TokenLiteral() string { return nl.Token.Literal }
+func (nl *NullLiteral) String() string       { return "null" }
 
 // PrefixExpression
 type PrefixExpression struct {

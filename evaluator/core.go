@@ -65,17 +65,67 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 		env.SetConst(node.Name.Value, val)
 
+	case *ast.MakeStatement:
+		// #make defines a compile-time constant (like C's #define)
+		val := Eval(node.Value, env)
+		if isError(val) {
+			return val
+		}
+		env.SetConst(node.Name.Value, val)
+
+	case *ast.EnumStatement:
+		// Create enum type and register all values
+		enumObj := &object.Enum{
+			Name:   node.Name.Value,
+			Values: make(map[string]int64),
+		}
+		var nextValue int64 = 0
+		for _, v := range node.Values {
+			var value int64
+			if v.Value != nil {
+				valObj := Eval(v.Value, env)
+				if isError(valObj) {
+					return valObj
+				}
+				if intObj, ok := valObj.(*object.Integer); ok {
+					value = intObj.Value
+					nextValue = value + 1
+				} else {
+					return newError("enum value must be an integer")
+				}
+			} else {
+				value = nextValue
+				nextValue++
+			}
+			enumObj.Values[v.Name.Value] = value
+			// Register each enum value as a constant: EnumName.ValueName
+			enumValue := &object.EnumValue{
+				EnumName:  node.Name.Value,
+				ValueName: v.Name.Value,
+				Value:     value,
+			}
+			env.SetConst(node.Name.Value+"."+v.Name.Value, enumValue)
+		}
+		// Register the enum type itself
+		env.SetConst(node.Name.Value, enumObj)
+
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
 
 	case *ast.FloatLiteral:
 		return &object.Float{Value: node.Value}
 
+	case *ast.CharLiteral:
+		return &object.Char{Value: node.Value}
+
 	case *ast.StringLiteral:
 		return evalStringLiteral(node.Value, env)
 
 	case *ast.Boolean:
 		return nativeBoolToBooleanObject(node.Value)
+
+	case *ast.NullLiteral:
+		return NULL
 
 	case *ast.PrefixExpression:
 		if node.Operator == "++" || node.Operator == "--" {

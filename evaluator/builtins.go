@@ -143,6 +143,287 @@ var builtins = map[string]*object.Builtin{
 			}
 		},
 	},
+	"char": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Integer:
+				return &object.Char{Value: rune(arg.Value)}
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return newError("cannot convert empty string to char")
+				}
+				runes := []rune(arg.Value)
+				return &object.Char{Value: runes[0]}
+			case *object.Char:
+				return arg
+			case *object.Byte:
+				return &object.Char{Value: rune(arg.Value)}
+			case *object.Rune:
+				return &object.Char{Value: arg.Value}
+			default:
+				return newError("argument to `char` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"byte": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Integer:
+				return &object.Byte{Value: byte(arg.Value)}
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return newError("cannot convert empty string to byte")
+				}
+				return &object.Byte{Value: arg.Value[0]}
+			case *object.Char:
+				return &object.Byte{Value: byte(arg.Value)}
+			case *object.Byte:
+				return arg
+			case *object.Rune:
+				return &object.Byte{Value: byte(arg.Value)}
+			default:
+				return newError("argument to `byte` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"rune": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Integer:
+				return &object.Rune{Value: rune(arg.Value)}
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return newError("cannot convert empty string to rune")
+				}
+				runes := []rune(arg.Value)
+				return &object.Rune{Value: runes[0]}
+			case *object.Char:
+				return &object.Rune{Value: arg.Value}
+			case *object.Byte:
+				return &object.Rune{Value: rune(arg.Value)}
+			case *object.Rune:
+				return arg
+			default:
+				return newError("argument to `rune` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"ord": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Char:
+				return &object.Integer{Value: int64(arg.Value)}
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return newError("cannot get ordinal of empty string")
+				}
+				runes := []rune(arg.Value)
+				return &object.Integer{Value: int64(runes[0])}
+			case *object.Byte:
+				return &object.Integer{Value: int64(arg.Value)}
+			case *object.Rune:
+				return &object.Integer{Value: int64(arg.Value)}
+			default:
+				return newError("argument to `ord` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"chr": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Integer:
+				return &object.String{Value: string(rune(arg.Value))}
+			case *object.Char:
+				return &object.String{Value: string(arg.Value)}
+			case *object.Byte:
+				return &object.String{Value: string(arg.Value)}
+			case *object.Rune:
+				return &object.String{Value: string(arg.Value)}
+			default:
+				return newError("argument to `chr` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"isDigit": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			var r rune
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r = arg.Value
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return FALSE
+				}
+				runes := []rune(arg.Value)
+				r = runes[0]
+			case *object.Rune:
+				r = arg.Value
+			default:
+				return newError("argument to `isDigit` not supported, got %s", args[0].Type())
+			}
+			if r >= '0' && r <= '9' {
+				return TRUE
+			}
+			return FALSE
+		},
+	},
+	"isLetter": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			var r rune
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r = arg.Value
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return FALSE
+				}
+				runes := []rune(arg.Value)
+				r = runes[0]
+			case *object.Rune:
+				r = arg.Value
+			default:
+				return newError("argument to `isLetter` not supported, got %s", args[0].Type())
+			}
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				return TRUE
+			}
+			return FALSE
+		},
+	},
+	"isAlpha": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			var r rune
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r = arg.Value
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return FALSE
+				}
+				runes := []rune(arg.Value)
+				r = runes[0]
+			case *object.Rune:
+				r = arg.Value
+			default:
+				return newError("argument to `isAlpha` not supported, got %s", args[0].Type())
+			}
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+				return TRUE
+			}
+			return FALSE
+		},
+	},
+	"isSpace": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			var r rune
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r = arg.Value
+			case *object.String:
+				if len(arg.Value) == 0 {
+					return FALSE
+				}
+				runes := []rune(arg.Value)
+				r = runes[0]
+			case *object.Rune:
+				r = arg.Value
+			default:
+				return newError("argument to `isSpace` not supported, got %s", args[0].Type())
+			}
+			if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+				return TRUE
+			}
+			return FALSE
+		},
+	},
+	"toUpper": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r := arg.Value
+				if r >= 'a' && r <= 'z' {
+					return &object.Char{Value: r - 32}
+				}
+				return arg
+			case *object.Rune:
+				r := arg.Value
+				if r >= 'a' && r <= 'z' {
+					return &object.Rune{Value: r - 32}
+				}
+				return arg
+			case *object.String:
+				return &object.String{Value: strings.ToUpper(arg.Value)}
+			default:
+				return newError("argument to `toUpper` not supported, got %s", args[0].Type())
+			}
+		},
+	},
+	"toLower": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("wrong number of arguments. got=%d, want=1", len(args))
+			}
+
+			switch arg := args[0].(type) {
+			case *object.Char:
+				r := arg.Value
+				if r >= 'A' && r <= 'Z' {
+					return &object.Char{Value: r + 32}
+				}
+				return arg
+			case *object.Rune:
+				r := arg.Value
+				if r >= 'A' && r <= 'Z' {
+					return &object.Rune{Value: r + 32}
+				}
+				return arg
+			case *object.String:
+				return &object.String{Value: strings.ToLower(arg.Value)}
+			default:
+				return newError("argument to `toLower` not supported, got %s", args[0].Type())
+			}
+		},
+	},
 	"string": {
 		Fn: func(args ...object.Object) object.Object {
 			if len(args) != 1 {

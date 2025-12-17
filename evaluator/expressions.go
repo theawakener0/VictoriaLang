@@ -342,11 +342,31 @@ func evalIndexExpression(left, index object.Object) object.Object {
 	switch {
 	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
 		return evalArrayIndexExpression(left, index)
+	case left.Type() == object.STRING_OBJ && index.Type() == object.INTEGER_OBJ:
+		return evalStringIndexExpression(left, index)
 	case left.Type() == object.HASH_OBJ:
 		return evalHashIndexExpression(left, index)
 	default:
 		return newError("index operator not supported: %s", left.Type())
 	}
+}
+
+func evalStringIndexExpression(str, index object.Object) object.Object {
+	strObject := str.(*object.String)
+	idx := index.(*object.Integer).Value
+	runes := []rune(strObject.Value)
+	max := int64(len(runes) - 1)
+
+	// Handle negative indices
+	if idx < 0 {
+		idx = int64(len(runes)) + idx
+	}
+
+	if idx < 0 || idx > max {
+		return NULL
+	}
+
+	return &object.String{Value: string(runes[idx])}
 }
 
 func evalArrayIndexExpression(array, index object.Object) object.Object {
@@ -436,6 +456,19 @@ func evalDotExpression(node *ast.InfixExpression, env *object.Environment) objec
 	ident, ok := node.Right.(*ast.Identifier)
 	if !ok {
 		return newError("expected identifier after dot")
+	}
+
+	// Handle enum value access: Color.RED
+	if left.Type() == object.ENUM_OBJ {
+		enumObj := left.(*object.Enum)
+		if value, ok := enumObj.Values[ident.Value]; ok {
+			return &object.EnumValue{
+				EnumName:  enumObj.Name,
+				ValueName: ident.Value,
+				Value:     value,
+			}
+		}
+		return newError("enum %s has no value %s", enumObj.Name, ident.Value)
 	}
 
 	if left.Type() == object.HASH_OBJ {
@@ -542,6 +575,11 @@ func evalPrefixIncDec(node *ast.PrefixExpression, env *object.Environment) objec
 }
 
 func evalAssignmentExpression(node *ast.InfixExpression, env *object.Environment) object.Object {
+	// Handle index assignment: arr[i] = val or hash[key] = val
+	if indexExpr, ok := node.Left.(*ast.IndexExpression); ok {
+		return evalIndexAssignment(indexExpr, node.Right, node.Operator, env)
+	}
+
 	ident, ok := node.Left.(*ast.Identifier)
 	if !ok {
 		return newError("assignment to non-identifier")
@@ -595,6 +633,98 @@ func evalAssignmentExpression(node *ast.InfixExpression, env *object.Environment
 
 	env.Update(ident.Value, newVal)
 	return newVal
+}
+
+// evalIndexAssignment handles assignment to indexed expressions: arr[i] = val, hash[key] = val
+func evalIndexAssignment(indexExpr *ast.IndexExpression, rightNode ast.Expression, operator string, env *object.Environment) object.Object {
+	left := Eval(indexExpr.Left, env)
+	if isError(left) {
+		return left
+	}
+
+	index := Eval(indexExpr.Index, env)
+	if isError(index) {
+		return index
+	}
+
+	val := Eval(rightNode, env)
+	if isError(val) {
+		return val
+	}
+
+	switch left := left.(type) {
+	case *object.Array:
+		idx, ok := index.(*object.Integer)
+		if !ok {
+			return newError("array index must be an integer, got %s", index.Type())
+		}
+		if idx.Value < 0 || idx.Value >= int64(len(left.Elements)) {
+			return newError("array index out of bounds: %d", idx.Value)
+		}
+		if operator == "=" {
+			left.Elements[idx.Value] = val
+		} else {
+			currentVal := left.Elements[idx.Value]
+			var newVal object.Object
+			switch operator {
+			case "+=":
+				newVal = evalInfixExpression("+", currentVal, val)
+			case "-=":
+				newVal = evalInfixExpression("-", currentVal, val)
+			case "*=":
+				newVal = evalInfixExpression("*", currentVal, val)
+			case "/=":
+				newVal = evalInfixExpression("/", currentVal, val)
+			case "%=":
+				newVal = evalInfixExpression("%", currentVal, val)
+			}
+			if isError(newVal) {
+				return newVal
+			}
+			left.Elements[idx.Value] = newVal
+			val = newVal
+		}
+		return val
+
+	case *object.Hash:
+		hashKey, ok := index.(object.Hashable)
+		if !ok {
+			return newError("unusable as hash key: %s", index.Type())
+		}
+		if operator == "=" {
+			left.Pairs[hashKey.HashKey()] = object.HashPair{Key: index, Value: val}
+		} else {
+			pair, exists := left.Pairs[hashKey.HashKey()]
+			var currentVal object.Object
+			if exists {
+				currentVal = pair.Value
+			} else {
+				currentVal = NULL
+			}
+			var newVal object.Object
+			switch operator {
+			case "+=":
+				newVal = evalInfixExpression("+", currentVal, val)
+			case "-=":
+				newVal = evalInfixExpression("-", currentVal, val)
+			case "*=":
+				newVal = evalInfixExpression("*", currentVal, val)
+			case "/=":
+				newVal = evalInfixExpression("/", currentVal, val)
+			case "%=":
+				newVal = evalInfixExpression("%", currentVal, val)
+			}
+			if isError(newVal) {
+				return newVal
+			}
+			left.Pairs[hashKey.HashKey()] = object.HashPair{Key: index, Value: newVal}
+			val = newVal
+		}
+		return val
+
+	default:
+		return newError("index assignment not supported for: %s", left.Type())
+	}
 }
 
 func evalTernaryExpression(node *ast.TernaryExpression, env *object.Environment) object.Object {

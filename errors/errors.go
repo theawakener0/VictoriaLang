@@ -1374,3 +1374,321 @@ func MissingReturnError(funcName, expected string, loc SourceLocation, source st
 		Help: fmt.Sprintf("add a return statement that returns a %s value", expected),
 	}
 }
+
+// ════════════════════════════════════════════════════════════════════════════════
+// DSA-SPECIFIC ERRORS - Common mistakes in algorithms and data structures
+// ════════════════════════════════════════════════════════════════════════════════
+
+// InfiniteLoopWarning creates a warning for potential infinite loops
+func InfiniteLoopWarning(reason string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindWarning,
+		Code:       "W0001",
+		Message:    fmt.Sprintf("potential infinite loop: %s", reason),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "this loop may never terminate", Primary: true},
+		},
+		Notes: []string{
+			"infinite loops can freeze your program",
+			"ensure your loop condition will eventually become false",
+		},
+		Help: "check that your loop variable is being modified inside the loop",
+	}
+}
+
+// RecursionDepthError creates an error for excessive recursion
+func RecursionDepthError(funcName string, depth int, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0040",
+		Message:    fmt.Sprintf("maximum recursion depth exceeded in '%s' (depth: %d)", funcName, depth),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "recursion too deep", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("function '%s' called itself too many times", funcName),
+			"this usually indicates missing base case or incorrect termination condition",
+			"DSA tip: every recursive function needs a base case that stops the recursion",
+		},
+		Help: "check your base case: ensure the recursion stops for some input (e.g., n <= 0, array is empty)",
+	}
+}
+
+// MemoizationSuggestion creates a suggestion to use memoization
+func MemoizationSuggestion(funcName string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindNote,
+		Code:       "N0001",
+		Message:    fmt.Sprintf("function '%s' may benefit from memoization", funcName),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "consider memoizing", Primary: false},
+		},
+		Notes: []string{
+			"memoization stores results of expensive function calls",
+			"it can dramatically improve performance for recursive algorithms",
+			"DSA tip: use a hash map to cache results",
+		},
+		Help: "add a cache: let memo = {}; if memo[key] != null { return memo[key] }; ... memo[key] = result",
+	}
+}
+
+// OffByOneError creates an error for common off-by-one mistakes
+func OffByOneError(context string, suggestion string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0041",
+		Message:    fmt.Sprintf("off-by-one error: %s", context),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "index boundary issue", Primary: true},
+		},
+		Notes: []string{
+			"off-by-one errors are one of the most common bugs in algorithms",
+			"remember: arrays use 0-based indexing (first element is index 0)",
+			"the last valid index is len(array) - 1, not len(array)",
+		},
+		Help: suggestion,
+	}
+}
+
+// EmptyCollectionError creates an error for operations on empty collections
+func EmptyCollectionError(operation string, typeName string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0042",
+		Message:    fmt.Sprintf("cannot %s on empty %s", operation, typeName),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("%s is empty", typeName), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("the %s has no elements to operate on", typeName),
+			"DSA tip: always check for empty collections before accessing elements",
+		},
+		Help: fmt.Sprintf("add a check: if len(collection) > 0 { ... } or if len(collection) == 0 { return defaultValue }"),
+	}
+}
+
+// BinarySearchError creates an error for common binary search mistakes
+func BinarySearchError(mistake string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0043",
+		Message:    fmt.Sprintf("binary search error: %s", mistake),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "binary search issue", Primary: true},
+		},
+		Notes: []string{
+			"binary search requires a sorted array",
+			"common mistakes: wrong mid calculation, incorrect boundary updates",
+			"DSA tip: use mid = left + (right - left) / 2 to avoid integer overflow",
+		},
+		Help: "ensure: 1) array is sorted, 2) boundaries update correctly, 3) loop condition is left <= right",
+	}
+}
+
+// GraphCycleError creates an error for cycle detection in graphs
+func GraphCycleError(loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0044",
+		Message:    "cycle detected in graph",
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "cycle found here", Primary: true},
+		},
+		Notes: []string{
+			"a cycle exists in the graph structure",
+			"DSA tip: use visited state tracking (UNVISITED, VISITING, VISITED) for cycle detection",
+		},
+		Help: "use an enum to track node states during DFS traversal",
+	}
+}
+
+// SortedArrayRequiredError creates an error when sorted array is required
+func SortedArrayRequiredError(operation string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0045",
+		Message:    fmt.Sprintf("%s requires a sorted array", operation),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "array may not be sorted", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("'%s' assumes the input array is sorted in ascending order", operation),
+			"DSA tip: sort the array first, or use a different algorithm",
+		},
+		Help: "ensure the array is sorted before calling this function",
+	}
+}
+
+// TimeComplexityWarning creates a warning for potentially slow operations
+func TimeComplexityWarning(operation string, complexity string, suggestion string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindWarning,
+		Code:       "W0002",
+		Message:    fmt.Sprintf("potentially slow: %s has %s complexity", operation, complexity),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: fmt.Sprintf("O(%s) operation", complexity), Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("this operation has %s time complexity", complexity),
+			"for large inputs, this may cause performance issues",
+		},
+		Help: suggestion,
+	}
+}
+
+// IntegerOverflowWarning creates a warning for potential integer overflow
+func IntegerOverflowWarning(operation string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindWarning,
+		Code:       "W0003",
+		Message:    fmt.Sprintf("potential integer overflow in %s", operation),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "may overflow for large values", Primary: true},
+		},
+		Notes: []string{
+			"integer operations can overflow for very large numbers",
+			"DSA tip: use modular arithmetic to prevent overflow",
+		},
+		Help: "use modulo: result = (a * b) % MOD, or use #make MOD 1000000007",
+	}
+}
+
+// NegativeIndexError creates an error for negative array indices
+func NegativeIndexError(index int64, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0046",
+		Message:    fmt.Sprintf("negative index: %d", index),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "negative indices not supported", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("index %d is negative", index),
+			"Victoria arrays use zero-based positive indexing",
+		},
+		Help: "to access from the end, use: arr[len(arr) - 1] for the last element",
+	}
+}
+
+// ConstantReassignmentError creates an error for reassigning constants
+func ConstantReassignmentError(name string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0047",
+		Message:    fmt.Sprintf("cannot reassign constant: '%s'", name),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "constant cannot be modified", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("'%s' was declared as a constant with 'const' or '#make'", name),
+			"constants are immutable and cannot be changed after declaration",
+		},
+		Help: fmt.Sprintf("if you need to modify '%s', declare it with 'let' instead of 'const'", name),
+	}
+}
+
+// EnumValueError creates an error for invalid enum access
+func EnumValueError(enumName, valueName string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0048",
+		Message:    fmt.Sprintf("enum '%s' has no value '%s'", enumName, valueName),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "invalid enum value", Primary: true},
+		},
+		Notes: []string{
+			fmt.Sprintf("'%s' is not a valid member of enum '%s'", valueName, enumName),
+			"DSA tip: enums are great for representing finite states (e.g., NodeState.VISITED)",
+		},
+		Help: fmt.Sprintf("check the enum definition for valid values: enum %s { VALUE1, VALUE2, ... }", enumName),
+	}
+}
+
+// CharacterConversionError creates an error for invalid character operations
+func CharacterConversionError(value string, operation string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0049",
+		Message:    fmt.Sprintf("cannot %s: '%s'", operation, value),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "invalid character operation", Primary: true},
+		},
+		Notes: []string{
+			"character operations expect single characters or valid ASCII values",
+			"ord() expects a character, chr() expects an integer 0-127",
+		},
+		Help: "for ord(): pass a single character 'a'. For chr(): pass an integer 0-127",
+	}
+}
+
+// ComparisonWithNullError creates an error for null comparisons
+func ComparisonWithNullError(operator string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindWarning,
+		Code:       "W0004",
+		Message:    fmt.Sprintf("comparing with null using '%s' may not work as expected", operator),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "null comparison", Primary: true},
+		},
+		Notes: []string{
+			"null is a special value representing 'no value'",
+			"only == and != are meaningful for null comparisons",
+		},
+		Help: "use 'value == null' or 'value != null' to check for null",
+	}
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// COMPETITIVE PROGRAMMING ERRORS
+// ════════════════════════════════════════════════════════════════════════════════
+
+// ModuloWithNegativeError creates an error for modulo with negative numbers
+func ModuloWithNegativeError(loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindWarning,
+		Code:       "W0005",
+		Message:    "modulo with negative number may give unexpected results",
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "modulo with negative", Primary: true},
+		},
+		Notes: []string{
+			"modulo behavior varies: some languages return negative, some positive",
+			"DSA tip: to ensure positive result, use: ((a % m) + m) % m",
+		},
+		Help: "for competitive programming, normalize negative results: ((result % MOD) + MOD) % MOD",
+	}
+}
+
+// MakeDirectiveError creates an error for invalid #make directive
+func MakeDirectiveError(message string, loc SourceLocation, source string) *VictoriaError {
+	return &VictoriaError{
+		Kind:       KindError,
+		Code:       "E0050",
+		Message:    fmt.Sprintf("#make error: %s", message),
+		SourceCode: source,
+		Labels: []Label{
+			{Location: loc, Message: "invalid #make directive", Primary: true},
+		},
+		Notes: []string{
+			"#make creates compile-time constants, similar to C's #define",
+			"syntax: #make NAME value",
+		},
+		Help: "example: #make MOD 1000000007 or #make MAX_N 100005",
+	}
+}

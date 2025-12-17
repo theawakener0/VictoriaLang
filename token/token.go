@@ -74,6 +74,7 @@ const (
 	LET      = "LET"
 	TRUE     = "TRUE"
 	FALSE    = "FALSE"
+	NULL_KW  = "NULL" // null keyword
 	IF       = "IF"
 	ELSE     = "ELSE"
 	RETURN   = "RETURN"
@@ -97,10 +98,21 @@ const (
 	TYPE_STRING = "TYPE_STRING"
 	TYPE_BOOL   = "TYPE_BOOL"
 	TYPE_CHAR   = "TYPE_CHAR"
+	TYPE_BYTE   = "TYPE_BYTE"
+	TYPE_RUNE   = "TYPE_RUNE"
 	TYPE_ARRAY  = "TYPE_ARRAY"
 	TYPE_MAP    = "TYPE_MAP"
 	TYPE_ANY    = "TYPE_ANY"
 	TYPE_VOID   = "TYPE_VOID"
+
+	// Enum keyword
+	ENUM = "ENUM"
+
+	// Preprocessor directives
+	MAKE = "MAKE" // #make directive (like C's #define)
+
+	// Literals
+	CHAR = "CHAR" // Character literal 'a'
 
 	// Special operators
 	SPREAD = "..."
@@ -111,6 +123,7 @@ var keywords = map[string]TokenType{
 	"let":      LET,
 	"true":     TRUE,
 	"false":    FALSE,
+	"null":     NULL_KW,
 	"if":       IF,
 	"else":     ELSE,
 	"return":   RETURN,
@@ -136,10 +149,13 @@ var keywords = map[string]TokenType{
 	"string": TYPE_STRING,
 	"bool":   TYPE_BOOL,
 	"char":   TYPE_CHAR,
+	"byte":   TYPE_BYTE,
+	"rune":   TYPE_RUNE,
 	"array":  TYPE_ARRAY,
 	"map":    TYPE_MAP,
 	"any":    TYPE_ANY,
 	"void":   TYPE_VOID,
+	"enum":   ENUM,
 }
 
 func LookupIdent(ident string) TokenType {
@@ -152,7 +168,7 @@ func LookupIdent(ident string) TokenType {
 // IsTypeKeyword returns true if the token type is a type keyword
 func IsTypeKeyword(t TokenType) bool {
 	switch t {
-	case TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_BOOL, TYPE_CHAR, TYPE_ARRAY, TYPE_MAP, TYPE_ANY, TYPE_VOID:
+	case TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_BOOL, TYPE_CHAR, TYPE_BYTE, TYPE_RUNE, TYPE_ARRAY, TYPE_MAP, TYPE_ANY, TYPE_VOID:
 		return true
 	}
 	return false
@@ -171,6 +187,10 @@ func TypeKeywordToString(t TokenType) string {
 		return "bool"
 	case TYPE_CHAR:
 		return "char"
+	case TYPE_BYTE:
+		return "byte"
+	case TYPE_RUNE:
+		return "rune"
 	case TYPE_ARRAY:
 		return "array"
 	case TYPE_MAP:

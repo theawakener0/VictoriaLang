@@ -20,11 +20,16 @@ const (
 	FUNCTION_OBJ       = "FUNCTION"
 	ARROW_FUNCTION_OBJ = "ARROW_FUNCTION"
 	STRING_OBJ         = "STRING"
+	CHAR_OBJ           = "CHAR"
+	BYTE_OBJ           = "BYTE"
+	RUNE_OBJ           = "RUNE"
 	BUILTIN_OBJ        = "BUILTIN"
 	ARRAY_OBJ          = "ARRAY"
 	HASH_OBJ           = "HASH"
 	STRUCT_OBJ         = "STRUCT"          // The struct definition
 	INSTANCE_OBJ       = "STRUCT_INSTANCE" // The instance
+	ENUM_OBJ           = "ENUM"            // Enum type definition
+	ENUM_VALUE_OBJ     = "ENUM_VALUE"      // Enum value
 	BREAK_OBJ          = "BREAK"
 	CONTINUE_OBJ       = "CONTINUE"
 	RANGE_OBJ          = "RANGE"
@@ -169,6 +174,75 @@ func (s *String) HashKey() HashKey {
 	h := fnv.New64a()
 	h.Write([]byte(s.Value))
 	return HashKey{Type: s.Type(), Value: h.Sum64()}
+}
+
+// Char represents a single character (rune value stored as int32)
+type Char struct {
+	Value rune
+}
+
+func (c *Char) Type() ObjectType { return CHAR_OBJ }
+func (c *Char) Inspect() string  { return fmt.Sprintf("'%c'", c.Value) }
+func (c *Char) HashKey() HashKey {
+	return HashKey{Type: c.Type(), Value: uint64(c.Value)}
+}
+
+// Byte represents a single byte (0-255)
+type Byte struct {
+	Value byte
+}
+
+func (b *Byte) Type() ObjectType { return BYTE_OBJ }
+func (b *Byte) Inspect() string  { return fmt.Sprintf("0x%02X", b.Value) }
+func (b *Byte) HashKey() HashKey {
+	return HashKey{Type: b.Type(), Value: uint64(b.Value)}
+}
+
+// Rune represents a Unicode code point (alias for Char but explicit)
+type Rune struct {
+	Value rune
+}
+
+func (r *Rune) Type() ObjectType { return RUNE_OBJ }
+func (r *Rune) Inspect() string  { return fmt.Sprintf("'%c' (U+%04X)", r.Value, r.Value) }
+func (r *Rune) HashKey() HashKey {
+	return HashKey{Type: r.Type(), Value: uint64(r.Value)}
+}
+
+// Enum represents an enum type definition
+type Enum struct {
+	Name   string
+	Values map[string]int64 // Maps enum variant names to their integer values
+}
+
+func (e *Enum) Type() ObjectType { return ENUM_OBJ }
+func (e *Enum) Inspect() string {
+	var out bytes.Buffer
+	out.WriteString("enum ")
+	out.WriteString(e.Name)
+	out.WriteString(" { ")
+	variants := []string{}
+	for name, val := range e.Values {
+		variants = append(variants, fmt.Sprintf("%s = %d", name, val))
+	}
+	out.WriteString(strings.Join(variants, ", "))
+	out.WriteString(" }")
+	return out.String()
+}
+
+// EnumValue represents a specific enum variant value
+type EnumValue struct {
+	EnumName  string // The enum type name
+	ValueName string // The variant name
+	Value     int64  // The integer value
+}
+
+func (ev *EnumValue) Type() ObjectType { return ENUM_VALUE_OBJ }
+func (ev *EnumValue) Inspect() string  { return fmt.Sprintf("%s.%s", ev.EnumName, ev.ValueName) }
+func (ev *EnumValue) HashKey() HashKey {
+	h := fnv.New64a()
+	h.Write([]byte(ev.EnumName + "." + ev.ValueName))
+	return HashKey{Type: ev.Type(), Value: h.Sum64()}
 }
 
 type BuiltinFunction func(args ...Object) Object
@@ -390,12 +464,30 @@ func CheckType(obj Object, typeAnn *ast.TypeAnnotation) bool {
 		_, ok := obj.(*Boolean)
 		return ok
 	case "char":
-		// Char is represented as a single-character string
-		s, ok := obj.(*String)
-		if !ok {
-			return false
+		// Char can be Char type or single-character string
+		if _, ok := obj.(*Char); ok {
+			return true
 		}
-		return len(s.Value) == 1
+		s, ok := obj.(*String)
+		if ok && len(s.Value) == 1 {
+			return true
+		}
+		return false
+	case "byte":
+		_, ok := obj.(*Byte)
+		return ok
+	case "rune":
+		// Rune can be Rune type, Char type, or Integer
+		if _, ok := obj.(*Rune); ok {
+			return true
+		}
+		if _, ok := obj.(*Char); ok {
+			return true
+		}
+		if _, ok := obj.(*Integer); ok {
+			return true
+		}
+		return false
 	case "array":
 		_, ok := obj.(*Array)
 		return ok
@@ -406,9 +498,14 @@ func CheckType(obj Object, typeAnn *ast.TypeAnnotation) bool {
 		_, ok := obj.(*Null)
 		return ok
 	default:
-		// Custom type (struct) - check if it's a struct instance with matching name
+		// Custom type (struct or enum) - check if it's a struct instance with matching name
 		si, ok := obj.(*StructInstance)
 		if ok && si.Struct.Name == typeName {
+			return true
+		}
+		// Check for enum values
+		ev, ok := obj.(*EnumValue)
+		if ok && ev.EnumName == typeName {
 			return true
 		}
 		return false
@@ -424,6 +521,12 @@ func TypeName(obj Object) string {
 		return "float"
 	case *String:
 		return "string"
+	case *Char:
+		return "char"
+	case *Byte:
+		return "byte"
+	case *Rune:
+		return "rune"
 	case *Boolean:
 		return "bool"
 	case *Array:
@@ -438,6 +541,10 @@ func TypeName(obj Object) string {
 		return "function"
 	case *StructInstance:
 		return obj.Struct.Name
+	case *EnumValue:
+		return obj.EnumName
+	case *Enum:
+		return "enum"
 	default:
 		return string(obj.Type())
 	}

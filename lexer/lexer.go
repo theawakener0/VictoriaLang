@@ -213,6 +213,26 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Literal = l.readString()
 		tok.Line = l.line
 		tok.EndColumn = l.column + 1
+	case '\'':
+		// Character literal 'a'
+		tok.Column = startCol
+		tok.Type = token.CHAR
+		tok.Literal = l.readCharLiteral()
+		tok.Line = l.line
+		tok.EndColumn = l.column + 1
+	case '#':
+		// Preprocessor directive #make
+		startCol := l.column
+		l.readChar() // consume #
+		if isLetter(l.ch) {
+			directive := l.readIdentifier()
+			if directive == "make" {
+				tok = token.Token{Type: token.MAKE, Literal: "#make", Line: l.line, Column: startCol, EndColumn: l.column}
+				return tok
+			}
+		}
+		tok = newTokenWithCol(token.ILLEGAL, '#', l.line, startCol)
+		return tok
 	case '`':
 		tok.Column = startCol
 		tok.Type = token.STRING
@@ -341,6 +361,40 @@ func (l *Lexer) readMultiLineString() string {
 		}
 	}
 	return l.input[position:l.position]
+}
+
+// readCharLiteral reads a character literal like 'a', '\n', '\t', etc.
+func (l *Lexer) readCharLiteral() string {
+	l.readChar() // consume opening '
+	var result string
+	if l.ch == '\\' {
+		// Escape sequence
+		l.readChar()
+		switch l.ch {
+		case 'n':
+			result = "\n"
+		case 't':
+			result = "\t"
+		case 'r':
+			result = "\r"
+		case '\\':
+			result = "\\"
+		case '\'':
+			result = "'"
+		case '0':
+			result = "\x00"
+		default:
+			result = string(l.ch)
+		}
+	} else {
+		result = string(l.ch)
+	}
+	l.readChar() // consume the character
+	// Expect closing '
+	if l.ch != '\'' {
+		return result // Missing closing quote, but return what we have
+	}
+	return result
 }
 
 func isLetter(ch byte) bool {

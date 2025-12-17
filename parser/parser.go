@@ -96,6 +96,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
+	p.registerPrefix(token.NULL_KW, p.parseNull)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
@@ -108,6 +109,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.INC, p.parsePrefixIncDec)
 	p.registerPrefix(token.DEC, p.parsePrefixIncDec)
 	p.registerPrefix(token.SPREAD, p.parseSpreadExpression)
+	p.registerPrefix(token.CHAR, p.parseCharLiteral)
 
 	// Allow type keywords to be used as identifiers in expression context
 	// This allows builtin functions like string(), int(), float(), bool() to work
@@ -116,6 +118,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.TYPE_FLOAT, p.parseTypeKeywordAsIdentifier)
 	p.registerPrefix(token.TYPE_BOOL, p.parseTypeKeywordAsIdentifier)
 	p.registerPrefix(token.TYPE_CHAR, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_BYTE, p.parseTypeKeywordAsIdentifier)
+	p.registerPrefix(token.TYPE_RUNE, p.parseTypeKeywordAsIdentifier)
 	p.registerPrefix(token.TYPE_ARRAY, p.parseTypeKeywordAsIdentifier)
 	p.registerPrefix(token.TYPE_MAP, p.parseTypeKeywordAsIdentifier)
 	p.registerPrefix(token.TYPE_ANY, p.parseTypeKeywordAsIdentifier)
@@ -265,6 +269,10 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseLetStatement()
 	case token.CONST:
 		return p.parseConstStatement()
+	case token.MAKE:
+		return p.parseMakeStatement()
+	case token.ENUM:
+		return p.parseEnumStatement()
 	case token.RETURN:
 		return p.parseReturnStatement()
 	case token.INCLUDE:
@@ -349,6 +357,76 @@ func (p *Parser) parseConstStatement() *ast.ConstStatement {
 
 	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
+	}
+
+	return stmt
+}
+
+// parseMakeStatement parses #make NAME VALUE (like C's #define)
+func (p *Parser) parseMakeStatement() *ast.MakeStatement {
+	stmt := &ast.MakeStatement{Token: p.curToken}
+
+	if !p.expectPeek(token.IDENT) {
+		return nil
+	}
+
+	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	p.nextToken()
+
+	stmt.Value = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+// parseEnumStatement parses enum definitions: enum Color { RED, GREEN, BLUE }
+func (p *Parser) parseEnumStatement() *ast.EnumStatement {
+	stmt := &ast.EnumStatement{Token: p.curToken}
+
+	if !p.expectPeek(token.IDENT) {
+		return nil
+	}
+
+	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	stmt.Values = []*ast.EnumValue{}
+	nextValue := int64(0)
+
+	for !p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+
+		if p.curTokenIs(token.IDENT) {
+			enumVal := &ast.EnumValue{
+				Name: &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal},
+			}
+
+			// Check for explicit value assignment: RED = 1
+			if p.peekTokenIs(token.ASSIGN) {
+				p.nextToken() // consume =
+				p.nextToken() // move to value
+				enumVal.Value = p.parseExpression(LOWEST)
+			}
+
+			stmt.Values = append(stmt.Values, enumVal)
+			nextValue++
+		}
+
+		// Optional comma between values
+		if p.peekTokenIs(token.COMMA) {
+			p.nextToken()
+		}
+	}
+
+	if !p.expectPeek(token.RBRACE) {
+		return nil
 	}
 
 	return stmt
@@ -729,8 +807,22 @@ func (p *Parser) parseStringLiteral() ast.Expression {
 	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }
 
+func (p *Parser) parseCharLiteral() ast.Expression {
+	lit := &ast.CharLiteral{Token: p.curToken}
+	if len(p.curToken.Literal) > 0 {
+		// Get the first rune from the literal
+		runes := []rune(p.curToken.Literal)
+		lit.Value = runes[0]
+	}
+	return lit
+}
+
 func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
+}
+
+func (p *Parser) parseNull() ast.Expression {
+	return &ast.NullLiteral{Token: p.curToken}
 }
 
 func (p *Parser) parsePrefixExpression() ast.Expression {

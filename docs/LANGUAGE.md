@@ -83,6 +83,8 @@ Available types:
 - `string` - Text strings
 - `bool` - Boolean values (true/false)
 - `char` - Single character (single-char string)
+- `byte` - Single byte (0-255)
+- `rune` - Unicode code point (like Go's rune)
 - `array` - Arrays/lists
 - `map` - Hash maps/dictionaries
 - `any` - Any type (disables type checking)
@@ -95,6 +97,79 @@ let typed:int = 42     // typed variable
 let untyped = "hello"  // untyped (dynamic) variable
 ```
 
+## Preprocessor Directives
+
+### #make (Compile-Time Constants)
+
+The `#make` directive works like C's `#define` to create compile-time constants. These are especially useful for DSA (Data Structures and Algorithms) problems:
+
+```victoria
+#make MAX_SIZE 1000
+#make MOD 1000000007
+#make INF 999999999
+#make EPSILON 0.00001
+
+// Use in your code
+let arr = []
+for i in 0..MAX_SIZE {
+    arr = push(arr, 0)
+}
+
+// Great for competitive programming
+let result = (a * b) % MOD
+```
+
+`#make` creates immutable constants that cannot be reassigned, similar to `const` but semantically indicates a compile-time definition.
+
+## Enums
+
+Enums define a set of named integer constants, perfect for representing states, options, or categories:
+
+```victoria
+// Basic enum
+enum Color {
+    RED,        // 0
+    GREEN,      // 1
+    BLUE        // 2
+}
+
+// Enum with explicit values
+enum HttpStatus {
+    OK = 200,
+    NOT_FOUND = 404,
+    SERVER_ERROR = 500
+}
+
+// Using enums
+let myColor = Color.RED
+print(myColor)           // Color.RED
+
+// Enums in switch statements
+switch (myColor) {
+    case Color.RED: {
+        print("It's red!")
+    }
+    case Color.GREEN: {
+        print("It's green!")
+    }
+    case Color.BLUE: {
+        print("It's blue!")
+    }
+}
+
+// Enum for graph algorithms
+enum NodeState {
+    UNVISITED,
+    VISITING,
+    VISITED
+}
+
+let states = []
+for i in 0..n {
+    states = push(states, NodeState.UNVISITED)
+}
+```
+
 ## Data Types
 
 Victoria supports the following basic data types:
@@ -102,10 +177,50 @@ Victoria supports the following basic data types:
 - **Integer**: `1`, `42`, `-10`
 - **Float**: `3.14`, `0.001`
 - **String**: `"Hello World"` or `` `multi-line string` ``
+- **Char**: `'a'`, `'Z'`, `'\n'` (single character with single quotes)
+- **Byte**: Single byte value (0-255)
+- **Rune**: Unicode code point (32-bit)
 - **Boolean**: `true`, `false`
 - **Null**: `null` (implicit in some contexts)
 - **Array**: `[1, 2, 3]`
 - **Hash**: `{"key": "value"}`
+- **Enum**: Named integer constants
+
+### Character Literals
+
+Use single quotes for character literals:
+
+```victoria
+let ch = 'A'           // Character literal
+let newline = '\n'     // Escape sequences supported
+let tab = '\t'
+
+// Get ASCII/Unicode value
+let ascii = ord('A')   // 65
+print(ascii)
+
+// Convert number to character
+let letter = chr(65)   // "A"
+print(letter)
+
+// Character functions for DSA
+if (isDigit(ch)) {
+    print("It's a digit!")
+}
+
+if (isLetter(ch)) {
+    print("It's a letter!")
+}
+
+// Useful for string parsing in algorithms
+let str = "abc123"
+for i in 0..len(str) {
+    let c = str[i]
+    if (isDigit(c)) {
+        print("Found digit: ${c}")
+    }
+}
+```
 
 ### String Interpolation
 
@@ -833,6 +948,58 @@ Victoria comes with a standard library of built-in functions:
 | `int(arg)` | Converts a value to an integer |
 | `string(arg)` | Converts a value to a string |
 | `float(arg)` | Converts a value to a float |
+| `char(arg)` | Converts a value to a character |
+| `byte(arg)` | Converts a value to a byte (0-255) |
+| `rune(arg)` | Converts a value to a rune (Unicode code point) |
+
+### Character Functions
+
+These functions are essential for DSA problems involving string parsing, character classification, and manipulation:
+
+| Function | Description |
+|----------|-------------|
+| `ord(char)` | Returns the ASCII/Unicode value of a character |
+| `chr(int)` | Returns the character for an ASCII/Unicode value |
+| `isDigit(char)` | Returns `true` if character is '0'-'9' |
+| `isLetter(char)` | Returns `true` if character is 'a'-'z' or 'A'-'Z' |
+| `isAlpha(char)` | Returns `true` if character is alphanumeric |
+| `isSpace(char)` | Returns `true` if character is whitespace |
+| `toUpper(char)` | Converts character to uppercase |
+| `toLower(char)` | Converts character to lowercase |
+
+```victoria
+// Example: Count digits and letters in a string
+let str = "Hello123World456"
+let digits = 0
+let letters = 0
+
+for i in 0..len(str) {
+    let c = str[i]
+    if (isDigit(c)) {
+        digits++
+    }
+    if (isLetter(c)) {
+        letters++
+    }
+}
+print("Digits: ${digits}, Letters: ${letters}")
+// Output: Digits: 6, Letters: 10
+
+// Example: Convert string to uppercase manually
+define toUpperStr(s) {
+    let result = ""
+    for i in 0..len(s) {
+        let c = s[i]
+        if (ord(c) >= ord('a') && ord(c) <= ord('z')) {
+            result = result + chr(ord(c) - 32)
+        } else {
+            result = result + c
+        }
+    }
+    return result
+}
+print(toUpperStr("hello"))  // "HELLO"
+```
 
 ### Range
 
@@ -1002,3 +1169,440 @@ Victoria automatically suggests corrections for common mistakes from other langu
 | `elif` | `else if` |
 
 These error messages are designed to help developers—especially those learning to program—understand what went wrong and how to fix it, just like the Rust compiler does.
+
+---
+
+## DSA (Data Structures & Algorithms) Guide
+
+Victoria is specifically designed to make learning and implementing data structures and algorithms easy and enjoyable. This section covers DSA-specific features and common patterns.
+
+### Why Victoria for DSA?
+
+| Feature | Victoria | Benefit for DSA |
+|---------|----------|-----------------|
+| `#make` directive | `#make MOD 1000000007` | C-like constants without includes |
+| `enum` | `enum NodeState { UNVISITED, VISITING, VISITED }` | Clean state management for graphs |
+| Character ops | `ord('a')`, `chr(97)`, `isDigit()` | Easy string parsing |
+| Array slicing | `arr[1:5]`, `arr[:mid]`, `arr[mid:]` | Merge sort, divide & conquer |
+| Hash assignment | `freq[c] = 1`, `memo[key] = result` | Frequency counting, memoization |
+| First-class functions | `map()`, `filter()`, `reduce()` | Functional transformations |
+
+---
+
+### Common DSA Constants
+
+```victoria
+// Competitive programming essentials
+#make MOD 1000000007        // Most common modulo
+#make MOD2 998244353        // NTT-friendly prime
+#make INF 999999999         // Infinity for shortest path
+#make NINF -999999999       // Negative infinity
+#make MAXN 100005           // Common array size
+#make EPSILON 0.000001      // Float comparison threshold
+```
+
+---
+
+### Pattern 1: Frequency Counting
+
+```victoria
+// Count character frequency (classic interview question)
+define countFrequency(s) {
+    let freq = {}
+    for i in 0..len(s) {
+        let c = s[i]
+        if (freq[c] == null) {
+            freq[c] = 1
+        } else {
+            freq[c] = freq[c] + 1
+        }
+    }
+    return freq
+}
+
+// Usage
+let freq = countFrequency("mississippi")
+print(freq)  // {m: 1, i: 4, s: 4, p: 2}
+```
+
+---
+
+### Pattern 2: Two Pointers
+
+```victoria
+// Check if palindrome
+define isPalindrome(s) {
+    let left = 0
+    let right = len(s) - 1
+    
+    while (left < right) {
+        if (toLower(s[left]) != toLower(s[right])) {
+            return false
+        }
+        left = left + 1
+        right = right - 1
+    }
+    return true
+}
+
+// Two Sum (sorted array)
+define twoSum(arr, target) {
+    let left = 0
+    let right = len(arr) - 1
+    
+    while (left < right) {
+        let sum = arr[left] + arr[right]
+        if (sum == target) {
+            return [left, right]
+        } else if (sum < target) {
+            left = left + 1
+        } else {
+            right = right - 1
+        }
+    }
+    return []
+}
+```
+
+---
+
+### Pattern 3: Binary Search
+
+```victoria
+define binarySearch(arr, target) {
+    let left = 0
+    let right = len(arr) - 1
+    
+    while (left <= right) {
+        // Use this form to avoid integer overflow
+        let mid = left + (right - left) / 2
+        
+        if (arr[mid] == target) {
+            return mid
+        } else if (arr[mid] < target) {
+            left = mid + 1
+        } else {
+            right = mid - 1
+        }
+    }
+    return -1  // Not found
+}
+
+// Find lower bound (first >= target)
+define lowerBound(arr, target) {
+    let left = 0
+    let right = len(arr)
+    
+    while (left < right) {
+        let mid = left + (right - left) / 2
+        if (arr[mid] < target) {
+            left = mid + 1
+        } else {
+            right = mid
+        }
+    }
+    return left
+}
+```
+
+---
+
+### Pattern 4: Memoization (Dynamic Programming)
+
+```victoria
+// Fibonacci with memoization
+let fibMemo = {}
+
+define fib(n) {
+    if (n <= 1) {
+        return n
+    }
+    
+    // Check cache first
+    if (fibMemo[n] != null) {
+        return fibMemo[n]
+    }
+    
+    // Compute and cache
+    let result = fib(n - 1) + fib(n - 2)
+    fibMemo[n] = result
+    return result
+}
+
+// Now fib(40) runs instantly instead of taking seconds
+print(fib(40))  // 102334155
+```
+
+---
+
+### Pattern 5: Graph State Management with Enums
+
+```victoria
+// Perfect for cycle detection, topological sort
+enum NodeState {
+    UNVISITED,   // 0 - Not yet visited
+    VISITING,    // 1 - Currently in DFS stack
+    VISITED      // 2 - Completely processed
+}
+
+define hasCycle(graph, node, states) {
+    if (states[node] == NodeState.VISITING) {
+        return true  // Back edge found = cycle!
+    }
+    if (states[node] == NodeState.VISITED) {
+        return false  // Already processed
+    }
+    
+    states[node] = NodeState.VISITING
+    
+    for neighbor in graph[node] {
+        if (hasCycle(graph, neighbor, states)) {
+            return true
+        }
+    }
+    
+    states[node] = NodeState.VISITED
+    return false
+}
+```
+
+---
+
+### Pattern 6: Divide and Conquer (Merge Sort)
+
+```victoria
+define mergeSort(arr) {
+    if (len(arr) <= 1) {
+        return arr
+    }
+    
+    let mid = len(arr) / 2
+    let left = mergeSort(arr[:mid])    // Array slicing!
+    let right = mergeSort(arr[mid:])   // So clean!
+    
+    return merge(left, right)
+}
+
+define merge(left, right) {
+    let result = []
+    let i = 0
+    let j = 0
+    
+    while (i < len(left) && j < len(right)) {
+        if (left[i] <= right[j]) {
+            result = push(result, left[i])
+            i = i + 1
+        } else {
+            result = push(result, right[j])
+            j = j + 1
+        }
+    }
+    
+    // Add remaining elements
+    while (i < len(left)) {
+        result = push(result, left[i])
+        i = i + 1
+    }
+    while (j < len(right)) {
+        result = push(result, right[j])
+        j = j + 1
+    }
+    
+    return result
+}
+```
+
+---
+
+### Pattern 7: Number Theory
+
+```victoria
+#make MOD 1000000007
+
+// Greatest Common Divisor (Euclidean algorithm)
+define gcd(a, b) {
+    if (b == 0) {
+        return a
+    }
+    return gcd(b, a % b)
+}
+
+// Least Common Multiple
+define lcm(a, b) {
+    return (a / gcd(a, b)) * b
+}
+
+// Modular exponentiation (a^b % MOD)
+define modPow(base, exp, mod) {
+    let result = 1
+    base = base % mod
+    
+    while (exp > 0) {
+        if (exp % 2 == 1) {
+            result = (result * base) % mod
+        }
+        exp = exp / 2
+        base = (base * base) % mod
+    }
+    return result
+}
+
+// Sieve of Eratosthenes
+define sieve(n) {
+    let isPrime = []
+    for i in 0..n+1 {
+        isPrime = push(isPrime, true)
+    }
+    isPrime[0] = false
+    isPrime[1] = false
+    
+    for i in 2..n+1 {
+        if (isPrime[i]) {
+            let j = i * i
+            while (j <= n) {
+                isPrime[j] = false
+                j = j + i
+            }
+        }
+    }
+    
+    let primes = []
+    for i in 0..n+1 {
+        if (isPrime[i]) {
+            primes = push(primes, i)
+        }
+    }
+    return primes
+}
+```
+
+---
+
+### Pattern 8: String Parsing
+
+```victoria
+// Parse integers from a string
+define parseNumbers(s) {
+    let numbers = []
+    let current = ""
+    
+    for i in 0..len(s) {
+        let c = s[i]
+        if (isDigit(c)) {
+            current = current + c
+        } else {
+            if (len(current) > 0) {
+                numbers = push(numbers, int(current))
+                current = ""
+            }
+        }
+    }
+    
+    // Don't forget the last number
+    if (len(current) > 0) {
+        numbers = push(numbers, int(current))
+    }
+    
+    return numbers
+}
+
+// Validate parentheses
+define isValidParentheses(s) {
+    let count = 0
+    for i in 0..len(s) {
+        let c = s[i]
+        if (c == "(") {
+            count = count + 1
+        } else if (c == ")") {
+            count = count - 1
+            if (count < 0) {
+                return false
+            }
+        }
+    }
+    return count == 0
+}
+```
+
+---
+
+### Common Mistakes to Avoid
+
+#### 1. Off-by-One Errors
+```victoria
+// WRONG: This misses the last element
+for i in 0..len(arr) - 1 { }
+
+// CORRECT: 0..n means 0 to n-1, which is all indices
+for i in 0..len(arr) { }
+```
+
+#### 2. Integer Overflow
+```victoria
+// WRONG: May overflow for large values
+let result = a * b
+
+// CORRECT: Use modular arithmetic
+#make MOD 1000000007
+let result = ((a % MOD) * (b % MOD)) % MOD
+```
+
+#### 3. Missing Base Case
+```victoria
+// WRONG: No base case = infinite recursion
+define fib(n) {
+    return fib(n-1) + fib(n-2)
+}
+
+// CORRECT: Always have a base case
+define fib(n) {
+    if (n <= 1) { return n }
+    return fib(n-1) + fib(n-2)
+}
+```
+
+#### 4. Binary Search Boundaries
+```victoria
+// WRONG: May cause infinite loop
+let mid = (left + right) / 2
+
+// CORRECT: Prevents overflow and handles edge cases
+let mid = left + (right - left) / 2
+```
+
+#### 5. Forgetting to Check Null/Empty
+```victoria
+// WRONG: May crash on empty array
+return arr[0]
+
+// CORRECT: Always check first
+if (len(arr) == 0) {
+    return null
+}
+return arr[0]
+```
+
+---
+
+### Quick Reference Card
+
+| Task | Victoria Code |
+|------|---------------|
+| Constant | `#make MOD 1000000007` |
+| Enum | `enum State { A, B, C }` |
+| Character to ASCII | `ord('A')` → 65 |
+| ASCII to character | `chr(65)` → "A" |
+| Is digit? | `isDigit('5')` → true |
+| Is letter? | `isLetter('a')` → true |
+| To uppercase | `toUpper("hello")` → "HELLO" |
+| To lowercase | `toLower("HELLO")` → "hello" |
+| Array slice | `arr[1:4]` → elements 1,2,3 |
+| Slice from start | `arr[:3]` → first 3 |
+| Slice to end | `arr[3:]` → from index 3 |
+| Hash set | `freq[key] = 1` |
+| Hash get | `freq[key]` |
+| Hash check | `if (freq[key] != null)` |
+
+---
+
+Happy coding! ��� Victoria makes DSA fun and accessible.
