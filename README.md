@@ -3,17 +3,15 @@
 <p align="center">
   <img src="media/QueenVictoria.jpg" alt="Queen Victoria">
 </p>
-      // TODO: Add more statement types
 
 <p align="center">
   <strong>The programming language you wish you had learned first.</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Victoria-v0.2--alpha-blueviolet?style=flat-square">
+  <img src="https://img.shields.io/badge/Victoria-v0.1--alpha-blueviolet?style=flat-square">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square">
   <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square">
-  <img src="https://img.shields.io/badge/DSA-Ready-orange?style=flat-square">
 </p>
 
 ---
