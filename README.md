@@ -1,4 +1,4 @@
-# Victoria
+# Victoria Programming Language
 
 <p align="center">
   <img src="media/QueenVictoria.jpg" alt="Queen Victoria">
