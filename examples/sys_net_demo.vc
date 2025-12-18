@@ -1,0 +1,48 @@
+include "os"
+include "net"
+
+print("--- System Engineering Demo ---")
+print("Platform: " + os.platform)
+print("Arch: " + os.arch)
+print("PID: " + string(os.pid))
+print("Hostname: " + os.hostname())
+
+let user = os.user()
+print("User: " + user.username)
+print("Home: " + user.home)
+
+print("Temp Dir: " + os.tempDir())
+
+print("\n--- Networking Demo ---")
+print("Looking up google.com...")
+let ips = net.lookupHost("google.com")
+print("IPs: " + string(ips))
+
+print("Network Interfaces:")
+let ifaces = net.interfaces()
+if (len(ifaces) > 0) {
+    let iface = ifaces[0]
+    print("  Name: " + iface.name)
+    print("  MAC: " + iface.mac)
+}
+
+print("\n--- Backend Demo (HTTP Server with Routing) ---")
+print("Starting server on port 8080...")
+print("Try visiting: http://localhost:8080/ and http://localhost:8080/api")
+
+// This will block, so we'll just print the code for it
+/*
+net.serve(8080, {
+    "/": define(req) { 
+        return "<h1>Welcome to Victoria Backend</h1>" 
+    },
+    "/api": define(req) {
+        return {
+            "status": 200,
+            "body": `{"message": "Hello from Victoria API"}`,
+            "headers": {"Content-Type": "application/json"}
+        }
+    }
+})
+*/
+print("Server code ready. (Commented out to avoid blocking the demo)")

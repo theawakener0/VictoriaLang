@@ -67,6 +67,34 @@ define factorial(n:int) -> int {
 | **DSA-ready constants** | ✅ (`#make`) | ❌ | ❌ | ✅ (`#define`) | ❌ |
 | **Enum support** | ✅ | ⚠️ (limited) | ❌ | ✅ | ✅ |
 | **Character operations** | ✅ | ✅ | ⚠️ | ✅ | ✅ |
+| **Package Manager** | ✅ (`vic`) | ✅ (`pip`) | ✅ (`npm`) | ❌ | ✅ (`maven`) |
+
+---
+
+## Module System & Package Manager
+
+Victoria features a modern module system and its own package manager, `vic`.
+
+### Using Modules
+Include built-in or local modules easily:
+```victoria
+include "os"
+include "math"
+include "mylib" // Loads mylib.vc
+
+print(math.sqrt(16))
+print(os.platform)
+```
+
+### The `vic` Package Manager
+Install libraries directly from GitHub:
+```bash
+# Install a library
+vic install victoria-lang/http-client
+
+# Use it in your code
+include "http-client"
+```
 
 ---
 

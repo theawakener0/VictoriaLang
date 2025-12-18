@@ -365,6 +365,16 @@ func (e *Environment) SetConst(name string, val Object) Object {
 	return val
 }
 
+// ToHash converts the environment's store to a Hash object
+func (e *Environment) ToHash() *Hash {
+	pairs := make(map[HashKey]HashPair)
+	for name, val := range e.store {
+		key := &String{Value: name}
+		pairs[key.HashKey()] = HashPair{Key: key, Value: val}
+	}
+	return &Hash{Pairs: pairs}
+}
+
 // IsConst checks if a variable is a constant
 func (e *Environment) IsConst(name string) bool {
 	if isConst, ok := e.consts[name]; ok && isConst {

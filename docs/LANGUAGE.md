@@ -729,23 +729,130 @@ include "os"         // Built-in OS module
 include "math"       // Built-in math module
 include "json"       // Built-in JSON module
 include "time"       // Built-in time/date module
-include "./mylib.vc" // Local file
+include "path"       // Built-in path module
+include "mylib"      // Local file (mylib.vc)
 ```
 
 Multiple modules can be included at once:
 
 ```victoria
-include ("os", "math", "json", "time")
+include ("os", "math", "json", "time", "path")
 ```
 
 ### Available Modules
 
-- `os`: File system operations (`readFile`, `writeFile`, `exists`, etc.)
+- `os`: File system operations (`readFile`, `writeFile`, `exists`, `exec`, `platform`, etc.)
 - `net`: Networking (`http.get`, `http.post`, `tcp.connect`, etc.)
 - `math`: Math functions (`abs`, `sqrt`, `pow`, `sin`, `cos`, `floor`, `ceil`, `round`, `min`, `max`, `random`, etc.)
 - `json`: JSON parsing and serialization (`parse`, `stringify`, `valid`)
 - `time`: Date/time operations (`now`, `format`, `parse`, `date`, `time`, etc.)
+- `path`: Path manipulation (`join`, `base`, `dir`, `ext`, `abs`, `isAbs`)
 - `std`: Standard utilities (common functions)
+
+### Module Isolation
+
+When you include a user-defined module (e.g., `include "mylib"`), Victoria evaluates it in an **isolated environment**. All top-level variables and functions defined in that module are exported as a Hash object named after the module.
+
+Example `mylib.vc`:
+```victoria
+let version = "1.0.0"
+let add = fn(a, b) { return a + b }
+```
+
+Example usage:
+```victoria
+include "mylib"
+print(mylib.version)
+print(mylib.add(1, 2))
+```
+
+### OS Module
+
+The OS module provides functions for interacting with the operating system and file system.
+
+```victoria
+include "os"
+
+// File operations
+os.writeFile("test.txt", "Hello Victoria!")
+let content = os.readFile("test.txt")
+print(os.exists("test.txt")) // true
+os.remove("test.txt")
+
+// Directory operations
+os.mkdir("data/logs")
+let files = os.readDir(".")
+os.chdir("data")
+print(os.getwd())
+
+// Environment and System
+print(os.env("PATH"))
+os.env("MY_VAR", "123")
+print(os.platform) // "windows", "linux", etc.
+print(os.arch)     // "amd64", "arm64", etc.
+print(os.pid)      // Current process ID
+print(os.hostname())
+print(os.user().username)
+
+// Command Execution
+let output = os.exec("echo", "Hello from Shell")
+print(output)
+
+// Process
+os.kill(1234) // Kill process by PID
+os.exit(0)
+```
+
+| Function/Property | Description |
+|-------------------|-------------|
+| `os.readFile(path)` | Read file content as string |
+| `os.writeFile(path, content)` | Write string to file |
+| `os.remove(path)` | Delete a file |
+| `os.exists(path)` | Check if file/dir exists |
+| `os.mkdir(path)` | Create directory (recursive) |
+| `os.readDir(path)` | List files in directory |
+| `os.stat(path)` | Get file info (size, modTime, isDir) |
+| `os.rename(old, new)` | Rename/move file or dir |
+| `os.getwd()` | Get current working directory |
+| `os.chdir(path)` | Change current working directory |
+| `os.env()` | Get all environment variables as Hash |
+| `os.env(key)` | Get environment variable |
+| `os.env(key, val)` | Set environment variable |
+| `os.args` | Array of command line arguments |
+| `os.platform` | Operating system name |
+| `os.arch` | CPU architecture |
+| `os.pid` | Current process ID |
+| `os.hostname()` | Get system hostname |
+| `os.user()` | Get current user info (Hash) |
+| `os.tempDir()` | Get system temp directory |
+| `os.chmod(path, mode)` | Change file permissions |
+| `os.exec(cmd, ...args)` | Execute external command and return output |
+| `os.kill(pid)` | Kill a process |
+| `os.exit(code)` | Exit the process |
+
+### Path Module
+
+The path module provides utilities for manipulating file and directory paths.
+
+```victoria
+include "path"
+
+let fullPath = path.join("data", "users", "config.json")
+print(path.base(fullPath)) // "config.json"
+print(path.dir(fullPath))  // "data/users"
+print(path.ext(fullPath))  // ".json"
+print(path.abs("."))       // Absolute path to current dir
+print(path.isAbs("/etc"))  // true (on Unix)
+```
+
+| Function | Description |
+|----------|-------------|
+| `path.join(...parts)` | Join path segments |
+| `path.base(path)` | Get last element of path |
+| `path.dir(path)` | Get directory part of path |
+| `path.ext(path)` | Get file extension |
+| `path.abs(path)` | Get absolute path |
+| `path.isAbs(path)` | Check if path is absolute |
 
 ### Math Module
 
@@ -927,6 +1034,77 @@ time.sleep(1000)  // Sleep for 1000 milliseconds (1 second)
 | `ss` | Second | 00-59 |
 | `A` | AM/PM | AM, PM |
 | `a` | am/pm | am, pm |
+
+### Net Module
+
+The net module provides networking capabilities for both client and server applications.
+
+```victoria
+include "net"
+
+// HTTP Client
+let resp = net.get("https://api.github.com")
+print(resp.status)
+print(resp.body)
+
+// Generic Request
+let postResp = net.request("POST", "https://example.com/api", `{"id": 1}`, {"Content-Type": "application/json"})
+
+// DNS and Interfaces
+print(net.lookupHost("google.com"))
+print(net.interfaces()[0].mac)
+
+// HTTP Server (Simple)
+net.listen(8080, fn(req) {
+    return "Hello from Victoria!"
+})
+
+// HTTP Server (with Routing)
+net.serve(8080, {
+    "/": fn(req) { return "Home" },
+    "/api": fn(req) { 
+        return {
+            "status": 200,
+            "body": `{"status": "ok"}`,
+            "headers": {"Content-Type": "application/json"}
+        }
+    }
+})
+
+// TCP Client
+let conn = net.dial("localhost", 9000)
+conn.write("Hello TCP\n")
+print(conn.read())
+conn.close()
+
+// TCP Server
+net.listenTcp(9000, fn(conn) {
+    let msg = conn.read()
+    print("Received: " + msg)
+    conn.write("Echo: " + msg + "\n")
+    conn.close()
+})
+
+// UDP Server
+net.listenUdp(9001, fn(packet) {
+    print("From " + packet.remote + ": " + packet.data)
+})
+```
+
+| Function | Description |
+|----------|-------------|
+| `net.get(url)` | HTTP GET request |
+| `net.post(url, body, [type])` | HTTP POST request |
+| `net.request(method, url, [body], [headers])` | Generic HTTP request |
+| `net.lookupHost(host)` | DNS lookup (returns array of IPs) |
+| `net.interfaces()` | Get network interfaces info |
+| `net.parseQuery(str)` | Parse URL query string to Hash |
+| `net.listen(port, handler)` | Start simple HTTP server |
+| `net.serve(port, routes)` | Start HTTP server with routing (Hash of path -> handler) |
+| `net.dial(host, port)` | Connect to TCP server |
+| `net.dialUdp(host, port)` | Connect to UDP server |
+| `net.listenTcp(port, handler)` | Start TCP server |
+| `net.listenUdp(port, handler)` | Start UDP server |
 
 ## Built-in Functions
 
@@ -1605,4 +1783,4 @@ return arr[0]
 
 ---
 
-Happy coding! íº€ Victoria makes DSA fun and accessible.
+Happy coding! ï¿½ï¿½ï¿½ Victoria makes DSA fun and accessible.

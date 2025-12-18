@@ -9,8 +9,12 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -313,6 +317,101 @@ func RegisterBuiltinModules() {
 					return &object.Array{Elements: elements}
 				},
 			},
+			"exec": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 1 {
+						return newError("wrong number of arguments. got=%d, want=at least 1", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ {
+						return newError("first argument to `exec` must be STRING (command)")
+					}
+					name := args[0].(*object.String).Value
+					cmdArgs := []string{}
+					for i := 1; i < len(args); i++ {
+						cmdArgs = append(cmdArgs, args[i].Inspect())
+					}
+					cmd := exec.Command(name, cmdArgs...)
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						return newError("command failed: %s\nOutput: %s", err.Error(), string(output))
+					}
+					return &object.String{Value: string(output)}
+				},
+			},
+			"platform": &object.String{Value: runtime.GOOS},
+			"arch":     &object.String{Value: runtime.GOARCH},
+			"pid":      &object.Integer{Value: int64(os.Getpid())},
+			"hostname": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					name, err := os.Hostname()
+					if err != nil {
+						return newError("could not get hostname: %s", err.Error())
+					}
+					return &object.String{Value: name}
+				},
+			},
+			"user": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					u, err := user.Current()
+					if err != nil {
+						return newError("could not get current user: %s", err.Error())
+					}
+					pairs := make(map[object.HashKey]object.HashPair)
+					usernameKey := &object.String{Value: "username"}
+					pairs[usernameKey.HashKey()] = object.HashPair{Key: usernameKey, Value: &object.String{Value: u.Username}}
+					nameKey := &object.String{Value: "name"}
+					pairs[nameKey.HashKey()] = object.HashPair{Key: nameKey, Value: &object.String{Value: u.Name}}
+					homeKey := &object.String{Value: "home"}
+					pairs[homeKey.HashKey()] = object.HashPair{Key: homeKey, Value: &object.String{Value: u.HomeDir}}
+					uidKey := &object.String{Value: "uid"}
+					pairs[uidKey.HashKey()] = object.HashPair{Key: uidKey, Value: &object.String{Value: u.Uid}}
+					gidKey := &object.String{Value: "gid"}
+					pairs[gidKey.HashKey()] = object.HashPair{Key: gidKey, Value: &object.String{Value: u.Gid}}
+					return &object.Hash{Pairs: pairs}
+				},
+			},
+			"tempDir": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					return &object.String{Value: os.TempDir()}
+				},
+			},
+			"chmod": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 2 {
+						return newError("wrong number of arguments. got=%d, want=2", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ || args[1].Type() != object.INTEGER_OBJ {
+						return newError("arguments to `chmod` must be STRING (path) and INTEGER (mode)")
+					}
+					path := args[0].(*object.String).Value
+					mode := args[1].(*object.Integer).Value
+					err := os.Chmod(path, os.FileMode(mode))
+					if err != nil {
+						return newError("could not chmod: %s", err.Error())
+					}
+					return TRUE
+				},
+			},
+			"kill": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 {
+						return newError("wrong number of arguments. got=%d, want=1", len(args))
+					}
+					if args[0].Type() != object.INTEGER_OBJ {
+						return newError("argument to `kill` must be INTEGER (pid)")
+					}
+					pid := int(args[0].(*object.Integer).Value)
+					proc, err := os.FindProcess(pid)
+					if err != nil {
+						return newError("could not find process: %s", err.Error())
+					}
+					err = proc.Kill()
+					if err != nil {
+						return newError("could not kill process: %s", err.Error())
+					}
+					return TRUE
+				},
+			},
 		}
 		return createModule(osMethods)
 	}
@@ -496,6 +595,64 @@ func RegisterBuiltinModules() {
 					return &object.Hash{Pairs: pairs}
 				},
 			},
+			"parseQuery": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `parseQuery` must be STRING")
+					}
+					query := args[0].(*object.String).Value
+					values, err := url.ParseQuery(query)
+					if err != nil {
+						return newError("failed to parse query: %s", err.Error())
+					}
+					pairs := make(map[object.HashKey]object.HashPair)
+					for key, vals := range values {
+						k := &object.String{Value: key}
+						v := &object.String{Value: strings.Join(vals, ",")}
+						pairs[k.HashKey()] = object.HashPair{Key: k, Value: v}
+					}
+					return &object.Hash{Pairs: pairs}
+				},
+			},
+			"lookupHost": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `lookupHost` must be STRING")
+					}
+					host := args[0].(*object.String).Value
+					addrs, err := net.LookupHost(host)
+					if err != nil {
+						return newError("failed to lookup host: %s", err.Error())
+					}
+					elements := make([]object.Object, len(addrs))
+					for i, addr := range addrs {
+						elements[i] = &object.String{Value: addr}
+					}
+					return &object.Array{Elements: elements}
+				},
+			},
+			"interfaces": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					ifaces, err := net.Interfaces()
+					if err != nil {
+						return newError("failed to get interfaces: %s", err.Error())
+					}
+					elements := make([]object.Object, len(ifaces))
+					for i, iface := range ifaces {
+						pairs := make(map[object.HashKey]object.HashPair)
+						nameKey := &object.String{Value: "name"}
+						pairs[nameKey.HashKey()] = object.HashPair{Key: nameKey, Value: &object.String{Value: iface.Name}}
+						indexKey := &object.String{Value: "index"}
+						pairs[indexKey.HashKey()] = object.HashPair{Key: indexKey, Value: &object.Integer{Value: int64(iface.Index)}}
+						mtuKey := &object.String{Value: "mtu"}
+						pairs[mtuKey.HashKey()] = object.HashPair{Key: mtuKey, Value: &object.Integer{Value: int64(iface.MTU)}}
+						macKey := &object.String{Value: "mac"}
+						pairs[macKey.HashKey()] = object.HashPair{Key: macKey, Value: &object.String{Value: iface.HardwareAddr.String()}}
+						elements[i] = &object.Hash{Pairs: pairs}
+					}
+					return &object.Array{Elements: elements}
+				},
+			},
 			"dial": &object.Builtin{
 				Fn: func(args ...object.Object) object.Object {
 					if len(args) != 2 {
@@ -513,6 +670,27 @@ func RegisterBuiltinModules() {
 					conn, err := net.Dial("tcp", addr)
 					if err != nil {
 						return newError("failed to connect: %s", err.Error())
+					}
+					return createSocketObject(conn)
+				},
+			},
+			"dialUdp": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 2 {
+						return newError("wrong number of arguments. got=%d, want=2", len(args))
+					}
+					if args[0].Type() != object.STRING_OBJ {
+						return newError("first argument to `dialUdp` must be STRING (host)")
+					}
+					if args[1].Type() != object.INTEGER_OBJ {
+						return newError("second argument to `dialUdp` must be INTEGER (port)")
+					}
+					host := args[0].(*object.String).Value
+					port := args[1].(*object.Integer).Value
+					addr := fmt.Sprintf("%s:%d", host, port)
+					conn, err := net.Dial("udp", addr)
+					if err != nil {
+						return newError("failed to connect UDP: %s", err.Error())
 					}
 					return createSocketObject(conn)
 				},
@@ -554,6 +732,103 @@ func RegisterBuiltinModules() {
 							builtin.Fn(connObj)
 						}
 					}
+				},
+			},
+			"listenUdp": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 2 {
+						return newError("wrong number of arguments. got=%d, want=2", len(args))
+					}
+					if args[0].Type() != object.INTEGER_OBJ {
+						return newError("first argument to `listenUdp` must be INTEGER (port)")
+					}
+					port := args[0].(*object.Integer).Value
+					handler := args[1]
+
+					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
+					conn, err := net.ListenUDP("udp", addr)
+					if err != nil {
+						return newError("failed to start UDP server: %s", err.Error())
+					}
+
+					fmt.Printf("UDP server listening on port %d\n", port)
+
+					buf := make([]byte, 4096)
+					for {
+						n, remoteAddr, err := conn.ReadFromUDP(buf)
+						if err != nil {
+							continue
+						}
+
+						data := string(buf[:n])
+						remote := remoteAddr.String()
+
+						pairs := make(map[object.HashKey]object.HashPair)
+						dataKey := &object.String{Value: "data"}
+						pairs[dataKey.HashKey()] = object.HashPair{Key: dataKey, Value: &object.String{Value: data}}
+						remoteKey := &object.String{Value: "remote"}
+						pairs[remoteKey.HashKey()] = object.HashPair{Key: remoteKey, Value: &object.String{Value: remote}}
+						packetObj := &object.Hash{Pairs: pairs}
+
+						if fn, ok := handler.(*object.Function); ok {
+							env := extendFunctionEnv(fn, []object.Object{packetObj})
+							Eval(fn.Body, env)
+						} else if builtin, ok := handler.(*object.Builtin); ok {
+							builtin.Fn(packetObj)
+						}
+					}
+				},
+			},
+			"request": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) < 2 {
+						return newError("wrong number of arguments. got=%d, want=at least 2", len(args))
+					}
+					method := strings.ToUpper(args[0].Inspect())
+					urlStr := args[1].Inspect()
+					var body io.Reader
+					if len(args) > 2 && args[2].Type() == object.STRING_OBJ {
+						body = strings.NewReader(args[2].(*object.String).Value)
+					}
+
+					req, err := http.NewRequest(method, urlStr, body)
+					if err != nil {
+						return newError("failed to create request: %s", err.Error())
+					}
+
+					if len(args) > 3 && args[3].Type() == object.HASH_OBJ {
+						headers := args[3].(*object.Hash)
+						for _, pair := range headers.Pairs {
+							req.Header.Set(pair.Key.Inspect(), pair.Value.Inspect())
+						}
+					}
+
+					client := &http.Client{}
+					resp, err := client.Do(req)
+					if err != nil {
+						return newError("HTTP request failed: %s", err.Error())
+					}
+					defer resp.Body.Close()
+
+					respBody, _ := io.ReadAll(resp.Body)
+					pairs := make(map[object.HashKey]object.HashPair)
+					statusKey := &object.String{Value: "status"}
+					pairs[statusKey.HashKey()] = object.HashPair{Key: statusKey, Value: &object.String{Value: resp.Status}}
+					statusCodeKey := &object.String{Value: "statusCode"}
+					pairs[statusCodeKey.HashKey()] = object.HashPair{Key: statusCodeKey, Value: &object.Integer{Value: int64(resp.StatusCode)}}
+					bodyKey := &object.String{Value: "body"}
+					pairs[bodyKey.HashKey()] = object.HashPair{Key: bodyKey, Value: &object.String{Value: string(respBody)}}
+
+					headerPairs := make(map[object.HashKey]object.HashPair)
+					for k, v := range resp.Header {
+						hk := &object.String{Value: k}
+						hv := &object.String{Value: strings.Join(v, ",")}
+						headerPairs[hk.HashKey()] = object.HashPair{Key: hk, Value: hv}
+					}
+					headersKey := &object.String{Value: "headers"}
+					pairs[headersKey.HashKey()] = object.HashPair{Key: headersKey, Value: &object.Hash{Pairs: headerPairs}}
+
+					return &object.Hash{Pairs: pairs}
 				},
 			},
 			"listen": &object.Builtin{
@@ -646,6 +921,86 @@ func RegisterBuiltinModules() {
 
 					fmt.Printf("HTTP server listening on port %d\n", port)
 					err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+					if err != nil {
+						return newError("failed to start server: %s", err.Error())
+					}
+					return NULL
+				},
+			},
+			"serve": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 2 {
+						return newError("wrong number of arguments. got=%d, want=2", len(args))
+					}
+					if args[0].Type() != object.INTEGER_OBJ {
+						return newError("first argument to `serve` must be INTEGER (port)")
+					}
+					if args[1].Type() != object.HASH_OBJ {
+						return newError("second argument to `serve` must be HASH (routes)")
+					}
+					port := args[0].(*object.Integer).Value
+					routes := args[1].(*object.Hash)
+
+					mux := http.NewServeMux()
+					for _, pair := range routes.Pairs {
+						path := pair.Key.Inspect()
+						handler := pair.Value
+
+						mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+							// Build request object
+							reqPairs := make(map[object.HashKey]object.HashPair)
+							methodKey := &object.String{Value: "method"}
+							reqPairs[methodKey.HashKey()] = object.HashPair{Key: methodKey, Value: &object.String{Value: r.Method}}
+							pathKey := &object.String{Value: "path"}
+							reqPairs[pathKey.HashKey()] = object.HashPair{Key: pathKey, Value: &object.String{Value: r.URL.Path}}
+							queryKey := &object.String{Value: "query"}
+							reqPairs[queryKey.HashKey()] = object.HashPair{Key: queryKey, Value: &object.String{Value: r.URL.RawQuery}}
+
+							body, _ := io.ReadAll(r.Body)
+							bodyKey := &object.String{Value: "body"}
+							reqPairs[bodyKey.HashKey()] = object.HashPair{Key: bodyKey, Value: &object.String{Value: string(body)}}
+
+							reqObj := &object.Hash{Pairs: reqPairs}
+
+							var result object.Object
+							if fn, ok := handler.(*object.Function); ok {
+								env := extendFunctionEnv(fn, []object.Object{reqObj})
+								result = Eval(fn.Body, env)
+								result = unwrapReturnValue(result)
+							} else if builtin, ok := handler.(*object.Builtin); ok {
+								result = builtin.Fn(reqObj)
+							}
+
+							if result != nil {
+								switch res := result.(type) {
+								case *object.String:
+									w.Write([]byte(res.Value))
+								case *object.Hash:
+									for _, p := range res.Pairs {
+										k := p.Key.Inspect()
+										if k == "status" {
+											if si, ok := p.Value.(*object.Integer); ok {
+												w.WriteHeader(int(si.Value))
+											}
+										} else if k == "body" {
+											w.Write([]byte(p.Value.Inspect()))
+										} else if k == "headers" {
+											if hh, ok := p.Value.(*object.Hash); ok {
+												for _, hp := range hh.Pairs {
+													w.Header().Set(hp.Key.Inspect(), hp.Value.Inspect())
+												}
+											}
+										}
+									}
+								default:
+									w.Write([]byte(result.Inspect()))
+								}
+							}
+						})
+					}
+
+					fmt.Printf("HTTP server (mux) listening on port %d\n", port)
+					err := http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
 					if err != nil {
 						return newError("failed to start server: %s", err.Error())
 					}
@@ -1132,6 +1487,72 @@ func RegisterBuiltinModules() {
 		}
 		return createModule(timeMethods)
 	}
+
+	// Path Module
+	moduleRegistry["path"] = func() *object.Hash {
+		pathMethods := map[string]object.Object{
+			"join": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					paths := make([]string, len(args))
+					for i, arg := range args {
+						if arg.Type() != object.STRING_OBJ {
+							return newError("arguments to `path.join` must be STRING")
+						}
+						paths[i] = arg.(*object.String).Value
+					}
+					return &object.String{Value: filepath.Join(paths...)}
+				},
+			},
+			"base": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `path.base` must be STRING")
+					}
+					return &object.String{Value: filepath.Base(args[0].(*object.String).Value)}
+				},
+			},
+			"dir": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `path.dir` must be STRING")
+					}
+					return &object.String{Value: filepath.Dir(args[0].(*object.String).Value)}
+				},
+			},
+			"ext": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `path.ext` must be STRING")
+					}
+					return &object.String{Value: filepath.Ext(args[0].(*object.String).Value)}
+				},
+			},
+			"abs": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `path.abs` must be STRING")
+					}
+					abs, err := filepath.Abs(args[0].(*object.String).Value)
+					if err != nil {
+						return newError("could not get absolute path: %s", err.Error())
+					}
+					return &object.String{Value: abs}
+				},
+			},
+			"isAbs": &object.Builtin{
+				Fn: func(args ...object.Object) object.Object {
+					if len(args) != 1 || args[0].Type() != object.STRING_OBJ {
+						return newError("argument to `path.isAbs` must be STRING")
+					}
+					if filepath.IsAbs(args[0].(*object.String).Value) {
+						return TRUE
+					}
+					return FALSE
+				},
+			},
+		}
+		return createModule(pathMethods)
+	}
 }
 
 // Helper function to get numeric value as float64 pointer
@@ -1263,6 +1684,46 @@ func convertTimeFormat(format string) string {
 	return result
 }
 
+func findModuleFile(name string) (string, bool) {
+	// 1. Current directory
+	path := name
+	if !strings.HasSuffix(path, ".vc") {
+		path += ".vc"
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, true
+	}
+
+	// 2. victoria_modules directory
+	// Check if it's a package name (e.g. "mylib")
+	pkgPath := filepath.Join("victoria_modules", name)
+	// Check for victoria_modules/name.vc
+	if _, err := os.Stat(pkgPath + ".vc"); err == nil {
+		return pkgPath + ".vc", true
+	}
+	// Check for victoria_modules/name/index.vc or victoria_modules/name/main.vc
+	if _, err := os.Stat(filepath.Join(pkgPath, "index.vc")); err == nil {
+		return filepath.Join(pkgPath, "index.vc"), true
+	}
+	if _, err := os.Stat(filepath.Join(pkgPath, "main.vc")); err == nil {
+		return filepath.Join(pkgPath, "main.vc"), true
+	}
+
+	// 3. Global modules
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		globalPath := filepath.Join(home, ".victoria", "modules", name)
+		if _, err := os.Stat(globalPath + ".vc"); err == nil {
+			return globalPath + ".vc", true
+		}
+		if _, err := os.Stat(filepath.Join(globalPath, "index.vc")); err == nil {
+			return filepath.Join(globalPath, "index.vc"), true
+		}
+	}
+
+	return "", false
+}
+
 // evalIncludeStatement handles include statements for modules and files
 func evalIncludeStatement(node *ast.IncludeStatement, env *object.Environment) object.Object {
 	for _, moduleName := range node.Modules {
@@ -1271,16 +1732,14 @@ func evalIncludeStatement(node *ast.IncludeStatement, env *object.Environment) o
 			env.Set(moduleName, module)
 		} else {
 			// Try to load as file
-			filename := moduleName
-			if !strings.HasSuffix(filename, ".vc") {
-				if _, err := os.Stat(filename); os.IsNotExist(err) {
-					filename = filename + ".vc"
-				}
+			filename, found := findModuleFile(moduleName)
+			if !found {
+				return newError("module or file not found: %s", moduleName)
 			}
 
 			content, err := os.ReadFile(filename)
 			if err != nil {
-				return newError("module or file not found: %s", moduleName)
+				return newError("could not read file: %s", err.Error())
 			}
 
 			l := lexer.New(string(content))
@@ -1295,10 +1754,22 @@ func evalIncludeStatement(node *ast.IncludeStatement, env *object.Environment) o
 				return newError(msg)
 			}
 
-			result := Eval(program, env)
+			// Create a new environment for the module to isolate it
+			moduleEnv := object.NewEnvironment()
+
+			result := Eval(program, moduleEnv)
 			if isError(result) {
 				return result
 			}
+
+			// Export the module's environment as a Hash
+			moduleObj := moduleEnv.ToHash()
+
+			// Use the base name of the module as the variable name
+			baseName := filepath.Base(moduleName)
+			baseName = strings.TrimSuffix(baseName, ".vc")
+
+			env.Set(baseName, moduleObj)
 		}
 	}
 	return NULL

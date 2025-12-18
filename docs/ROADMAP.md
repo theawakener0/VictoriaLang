@@ -6,7 +6,7 @@ This document outlines the planned development trajectory for Victoria. Our goal
 
 Victoria is currently in active development. The core language is functional and can be used for learning, prototyping, and small projects.
 
-### What Works Today ✅
+### What Works Today
 
 **Core Language**
 - Variables (`let`) and constants (`const`)
@@ -16,6 +16,7 @@ Victoria is currently in active development. The core language is functional and
 - Structs with methods
 - Lambda expressions
 - String interpolation
+- **Isolated Module System** - Modules run in their own scope to prevent name collisions
 
 **Type System**
 - Optional type annotations for variables
@@ -25,16 +26,18 @@ Victoria is currently in active development. The core language is functional and
 - Helpful type error messages
 
 **Built-in Modules**
-- `os` - Operating system interaction
+- `os` - Operating system interaction (now with `exec`, `platform`, `arch`)
 - `math` - Mathematical operations
 - `json` - JSON parsing/serialization
 - `time` - Date/time handling
 - `net` - HTTP client & TCP networking
+- `path` - Path manipulation utilities
 
 **Developer Experience**
 - Rust-inspired error messages with suggestions
 - REPL for interactive development
 - File-based script execution
+- `vic` Package Manager - Install libraries directly from GitHub
 
 ---
 
