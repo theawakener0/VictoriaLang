@@ -1,0 +1,19 @@
+let x: array = [3, 1, 7, 5, 4, 8];
+
+define BubbleSort(arr: array) -> void {
+    let n: int = len(arr);
+
+    for i in 0..n {
+        for j in 0..n-i-1 {
+            if (arr[j] > arr[j+1]) {
+                let temp: int = arr[j+1];
+                arr[j+1] = arr[j];
+                arr[j] = temp;
+            }
+        }
+    }
+}
+
+print(x);
+BubbleSort(x);
+print(x);

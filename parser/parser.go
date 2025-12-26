@@ -73,8 +73,10 @@ type Parser struct {
 	sourceCode string
 	filename   string
 
-	curToken  token.Token
-	peekToken token.Token
+	curToken   token.Token
+	peekToken  token.Token
+	peekToken2 token.Token
+	peekToken3 token.Token
 
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
@@ -158,13 +160,17 @@ func New(l *lexer.Lexer) *Parser {
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
 	p.nextToken()
+	p.nextToken()
+	p.nextToken()
 
 	return p
 }
 
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
-	p.peekToken = p.l.NextToken()
+	p.peekToken = p.peekToken2
+	p.peekToken2 = p.peekToken3
+	p.peekToken3 = p.l.NextToken()
 }
 
 func (p *Parser) curTokenIs(t token.TokenType) bool {
@@ -692,7 +698,21 @@ func (p *Parser) curPrecedence() int {
 func (p *Parser) parseIdentifier() ast.Expression {
 	// Check for Struct Instantiation: Student { ... }
 	if p.peekTokenIs(token.LBRACE) {
-		return p.parseStructInstantiation()
+		// Look ahead to see if it's a struct instantiation
+		isStruct := false
+		if p.peekToken2.Type == token.IDENT || p.peekToken2.Type == token.STRING {
+			if p.peekToken3.Type == token.COLON {
+				isStruct = true
+			}
+		}
+		// Also handle empty struct? Student {}
+		if p.peekToken2.Type == token.RBRACE {
+			isStruct = true
+		}
+
+		if isStruct {
+			return p.parseStructInstantiation()
+		}
 	}
 	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }

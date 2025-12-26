@@ -87,8 +87,7 @@ Victoria comes with built-in modules for common tasks:
 - **math** - Mathematical operations
 - **json** - JSON parsing and serialization
 - **time** - Date and time handling
-- **http** - HTTP client operations
-- **tcp** - Network programming
+- **net** - HTTP client operations & Network programming
 
 You can build useful programs on day one, without installing dependencies.
 

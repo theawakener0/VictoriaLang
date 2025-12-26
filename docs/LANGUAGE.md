@@ -1061,8 +1061,8 @@ net.listen(8080, fn(req) {
 
 // HTTP Server (with Routing)
 net.serve(8080, {
-    "/": fn(req) { return "Home" },
-    "/api": fn(req) { 
+    "/": define(req) { return "Home" },
+    "/api": define(req) { 
         return {
             "status": 200,
             "body": `{"status": "ok"}`,
@@ -1086,7 +1086,7 @@ net.listenTcp(9000, fn(conn) {
 })
 
 // UDP Server
-net.listenUdp(9001, fn(packet) {
+net.listenUdp(9001, define(packet) {
     print("From " + packet.remote + ": " + packet.data)
 })
 ```
@@ -1215,9 +1215,9 @@ range(10, 0, -1) // [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 | `rest(arr)` | Returns all elements except first |
 | `push(arr, elem)` | Returns new array with element added |
 | `pop(arr)` | Returns new array with last element removed |
-| `map(arr, fn)` | Transforms each element using function |
-| `filter(arr, fn)` | Keeps elements where function returns true |
-| `reduce(arr, fn, init)` | Reduces array to single value |
+| `map(arr, function)` | Transforms each element using function |
+| `filter(arr, function)` | Keeps elements where function returns true |
+| `reduce(arr, function, init)` | Reduces array to single value |
 | `contains(arr, item)` | Checks if array contains item |
 | `index(arr, item)` | Returns index of item (-1 if not found) |
 
